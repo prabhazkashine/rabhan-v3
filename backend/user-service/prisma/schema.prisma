@@ -1,0 +1,243 @@
+// schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================
+// ENUMS
+// =============================================
+
+enum UserRole {
+  USER
+  CONTRACTOR
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum AuthProvider {
+  EMAIL
+  NAFATH // Kept in case you add other login methods later
+}
+
+enum UserStatus {
+  PENDING     // User has registered but not verified email
+  ACTIVE      // User is verified and can log in
+  SUSPENDED   // User is temporarily blocked by an admin
+  LOCKED      // User is temporarily locked due to too many failed login attempts
+}
+
+enum UserType {
+  HOMEOWNER
+  CONTRACTOR
+  BUSINESS
+}
+
+enum VerificationType {
+  EMAIL
+  PASSWORD_RESET
+}
+
+
+
+// =============================================
+// USER PROFILE SERVICE ENUMS (Newly Added)
+// =============================================
+
+enum PropertyType {
+  villa
+  apartment
+  duplex
+  townhouse
+  commercial
+  industrial
+  other
+}
+
+enum PropertyOwnership {
+  owned
+  rented
+  leased
+  family_owned
+}
+
+enum ElectricityConsumptionRange {
+  E0_200     @map("0-200")
+  E200_400   @map("200-400")
+  E400_600   @map("400-600")
+  E600_800   @map("600-800")
+  E800_1000  @map("800-1000")
+  E1000_1200 @map("1000-1200")
+  E1200_1500 @map("1200-1500")
+  E1500_PLUS @map("1500+")
+}
+
+enum PreferredLanguage {
+  en
+  ar
+}
+
+enum EmploymentStatus {
+  government
+  private
+  self_employed
+  student
+  retired
+}
+
+enum ProfileVerificationStatus {
+  not_verified
+  pending
+  verified
+  rejected
+}
+
+// =============================================
+// MODELS
+// =============================================
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique @db.VarChar(255)
+  passwordHash String   @map("password_hash") @db.VarChar(255)
+
+  firstName    String?  @map("first_name") @db.VarChar(100)
+  lastName     String?  @map("last_name") @db.VarChar(100)
+  phone        String?  @unique @db.VarChar(20)
+  nationalId   String?  @unique @map("national_id") @db.VarChar(20)
+
+  role         UserRole @default(USER)
+  status       UserStatus @default(PENDING)
+  provider     AuthProvider @default(EMAIL)
+  userType     UserType @default(HOMEOWNER) @map("user_type")
+
+  // --- Security & Login Fields ---
+  emailVerified  Boolean   @default(false) @map("email_verified")
+  phoneVerified  Boolean   @default(false) @map("phone_verified")
+  loginAttempts  Int       @default(0) @map("login_attempts")
+  lockedUntil    DateTime? @map("locked_until")
+  lastLoginAt    DateTime? @map("last_login_at")
+
+  // --- Timestamps ---
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  // --- Relations ---
+  sessions            UserSession[]
+  passwordResetTokens PasswordResetToken[]
+  verificationTokens  VerificationToken[]
+
+  profile             UserProfile?
+
+  @@map("users")
+}
+
+
+model UserProfile {
+  id                  String      @id @default(uuid()) @db.Uuid
+  authUserId          String      @unique @map("auth_user_id") @db.Uuid // This creates the one-to-one link
+  
+  // Personal Information
+  firstName           String      @map("first_name") @db.VarChar(100)
+  lastName            String      @map("last_name") @db.VarChar(100)
+
+  // Address Information
+  region              String      @db.VarChar(100)
+  city                String      @db.VarChar(100)
+  district            String      @db.VarChar(100)
+  streetAddress       String      @map("street_address") @db.VarChar(255)
+  landmark            String?     @db.VarChar(255)
+  postalCode          String      @map("postal_code") @db.VarChar(10)
+
+  // Property & Energy Information
+  propertyType        PropertyType @map("property_type")
+  propertyOwnership   PropertyOwnership @map("property_ownership")
+  roofSize            Decimal     @map("roof_size") @db.Decimal(10, 2)
+  gpsLatitude         Decimal     @map("gps_latitude") @db.Decimal(10, 8)
+  gpsLongitude        Decimal     @map("gps_longitude") @db.Decimal(11, 8)
+  electricityConsumption ElectricityConsumptionRange @map("electricity_consumption")
+  electricityMeterNumber String   @map("electricity_meter_number") @db.VarChar(50)
+
+  // Employment Information (for BNPL eligibility)
+  employmentStatus    EmploymentStatus? @map("employment_status")
+  employerName        String?     @map("employer_name") @db.VarChar(255)
+  jobTitle            String?     @map("job_title") @db.VarChar(255)
+  monthlyIncome       Decimal?    @map("monthly_income") @db.Decimal(12, 2)
+  yearsEmployed       Int?        @map("years_employed")
+
+  // Solar System Preferences
+  desiredSystemSize   Decimal?    @map("desired_system_size") @db.Decimal(10, 2)
+  budgetRange         String?     @map("budget_range") @db.VarChar(50)
+
+  // Preferences
+  preferredLanguage   PreferredLanguage @default(ar) @map("preferred_language")
+  emailNotifications  Boolean     @default(true) @map("email_notifications")
+  smsNotifications    Boolean     @default(true) @map("sms_notifications")
+  marketingConsent    Boolean     @default(false) @map("marketing_consent")
+
+  // Profile Status
+  profileCompleted    Boolean     @default(false) @map("profile_completed")
+  profileCompletionPercentage Int @default(0) @map("profile_completion_percentage")
+
+  // BNPL Eligibility (Calculated fields)
+  bnplEligible        Boolean     @default(false) @map("bnpl_eligible")
+  bnplMaxAmount       Decimal     @default(0) @map("bnpl_max_amount") @db.Decimal(12, 2)
+  bnplRiskScore       Decimal?    @map("bnpl_risk_score") @db.Decimal(3, 2)
+
+  // Verification Status
+  verificationStatus  ProfileVerificationStatus @default(not_verified) @map("verification_status")
+
+  createdAt           DateTime    @default(now()) @map("created_at")
+  updatedAt           DateTime    @updatedAt @map("updated_at")
+
+  user User @relation(fields: [authUserId], references: [id], onDelete: Cascade)
+
+  @@map("user_profiles")
+}
+
+
+model UserSession {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @map("user_id") @db.Uuid
+  refreshToken String   @unique @map("refresh_token") @db.VarChar(500)
+  expiresAt    DateTime @map("expires_at")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  // --- Device & Location Info (Good for security) ---
+  userAgent    String?  @map("user_agent")
+  ipAddress    String?  @map("ip_address") @db.Inet
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_sessions")
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  token     String   @unique @db.VarChar(255)
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("password_reset_tokens")
+}
+
+model VerificationToken {
+  id          String           @id @default(uuid()) @db.Uuid
+  userId      String           @map("user_id") @db.Uuid
+  type        VerificationType // Will be EMAIL for registration
+  token       String           @unique @db.VarChar(255)
+  expiresAt   DateTime         @map("expires_at")
+  createdAt   DateTime         @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("verification_tokens")
+}

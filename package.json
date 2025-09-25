@@ -1,0 +1,14 @@
+{
+  "name": "rabhan-v3",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "backend/*",
+    "frontend/*"
+  ],
+  "scripts": {
+    "dev:user-service": "npm run dev -w user-service",
+    "dev:contractor-service": "npm run dev -w contractor-service",
+    "dev:react-app": "npm run dev -w react-app"
+  }
+}

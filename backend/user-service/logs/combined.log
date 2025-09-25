@@ -84,3 +84,6 @@
 {"email":"user@yopmail.com","level":"info","message":"User logged in successfully","service":"user-service","timestamp":"2025-09-25T14:00:42.335Z","userId":"48feefcc-3975-4b32-8d0b-0141253be6bc"}
 {"error":"[\n  {\n    \"origin\": \"string\",\n    \"code\": \"invalid_format\",\n    \"format\": \"regex\",\n    \"pattern\": \"/^[0-9]{5}$/\",\n    \"path\": [\n      \"postalCode\"\n    ],\n    \"message\": \"Postal code must be exactly 5 digits\"\n  }\n]","level":"error","message":"Unexpected validation error:","method":"PUT","path":"/","service":"user-service","timestamp":"2025-09-25T14:00:56.616Z"}
 {"level":"info","message":"User service is running on port 3001","service":"user-service","timestamp":"2025-09-25T14:02:02.036Z"}
+{"level":"info","message":"User service is running on port 3001","service":"user-service","timestamp":"2025-09-25T14:02:21.807Z"}
+{"bnplEligible":false,"completionPercentage":77,"level":"info","message":"User profile updated successfully","profileId":"26ed54f2-08d3-4c4e-947c-bfa54b806b03","service":"user-service","timestamp":"2025-09-25T14:02:25.877Z","userId":"48feefcc-3975-4b32-8d0b-0141253be6bc"}
+{"email":"user@yopmail.com","level":"info","message":"User logged in successfully","service":"user-service","timestamp":"2025-09-25T14:03:48.920Z","userId":"48feefcc-3975-4b32-8d0b-0141253be6bc"}

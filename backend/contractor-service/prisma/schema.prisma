@@ -87,6 +87,37 @@ enum ContractorType {
 }
 
 
+
+
+enum SupplierType {
+  CONTRACTOR_VENDOR
+  VENDOR_ONLY
+  CONTRACTOR_ONLY
+}
+
+enum NitaqatLevel {
+  EXCELLENT
+  GREEN
+  RED
+  YELLOW
+  NOT_APPLICABLE
+}
+
+enum EnterpriseSize {
+  MICRO
+  SMALL
+  MEDIUM
+  LARGE
+  GIANT
+}
+
+enum SecRegistrationType {
+  VENDOR
+  CONTRACTOR
+  BOTH
+}
+
+
 // =============================================
 // CONTRACTOR MODELS
 // =============================================
@@ -142,71 +173,127 @@ model ContractorProfile {
   id                      String            @id @default(uuid()) @db.Uuid
   userId                  String            @unique @map("user_id") @db.Uuid // Foreign key to the Contractor auth model
   
-  // --- Basic Information ---
-  businessName            String            @map("business_name") @db.VarChar(255)
-  businessNameAr          String?           @map("business_name_ar") @db.VarChar(255)
-  businessType            BusinessType      @default(individual) @map("business_type")
-  commercialRegistration  String?           @map("commercial_registration") @db.VarChar(100)
-  vatNumber               String?           @map("vat_number") @db.VarChar(20)
+  // --- Company Profile ---
+  companyProfileOverview  String?           @map("company_profile_overview") @db.Text
+  supplierType            SupplierType?     @map("supplier_type")
 
-  // --- Contact Information ---
+  // --- Commercial Registration Details ---
+  registrationCity        String?           @map("registration_city") @db.VarChar(100)
+  registrationRegion      String?           @map("registration_region") @db.VarChar(100)
+  companyNameArabic       String?           @map("company_name_arabic") @db.VarChar(255)
+  companyNameEnglish      String?           @map("company_name_english") @db.VarChar(255)
+  commercialRegistrationNumber String?      @map("commercial_registration_number") @db.VarChar(100)
+  formerCompanyName       String?           @map("former_company_name") @db.VarChar(255)
+  commercialRegistrationExpiryDate DateTime? @map("commercial_registration_expiry_date")
+  commercialRegistrationEstablishmentDate DateTime? @map("commercial_registration_establishment_date")
+  isMainCommercialRegistration Boolean?     @map("is_main_commercial_registration")
+  isForeignOwned          Boolean?          @map("is_foreign_owned")
+
+  // --- General Organization for Social Insurance (GOSI) Details ---
+  gosiMembershipNumber    String?           @map("gosi_membership_number") @db.VarChar(50)
+  gosiCertificateExpiryDate DateTime?       @map("gosi_certificate_expiry_date")
+  numberOfSaudiEmployees  Int?              @map("number_of_saudi_employees")
+  numberOfNonSaudiEmployees Int?            @map("number_of_non_saudi_employees")
+
+  // --- Ministry of Human Resources and Social Development - Nationalization Details ---
+  establishmentNumber     String?           @map("establishment_number") @db.VarChar(50)
+  nationalizationCertificateExpiryDate DateTime? @map("nationalization_certificate_expiry_date")
+  nitaqatLevel            NitaqatLevel?     @map("nitaqat_level")
+  organizationUnifiedNumber String?         @map("organization_unified_number") @db.VarChar(50)
+
+  // --- Monsha'at (Jadeer) ---
+  isMonshaatCertified     Boolean?          @map("is_monshaat_certified")
+  monshaatIssuingDate     DateTime?         @map("monshaat_issuing_date")
+  monshaatExpiryDate      DateTime?         @map("monshaat_expiry_date")
+  enterpriseSize          EnterpriseSize?   @map("enterprise_size")
+
+  // --- Zakat, Tax and Customs Authority (Zakat Details) ---
+  zakatUniqueNumber       String?           @map("zakat_unique_number") @db.VarChar(50)
+  zakatCertificateIssuingDate DateTime?      @map("zakat_certificate_issuing_date")
+  zakatCertificateExpiryDate DateTime?      @map("zakat_certificate_expiry_date")
+
+  // --- (VAT) Registration Details ---
+  isVatRegistered         Boolean?          @map("is_vat_registered")
+  isVatGroupMember        Boolean?          @map("is_vat_group_member")
+  vatRegistrationNumber   String?           @map("vat_registration_number") @db.VarChar(20)
+  vatRegistrationIssuingDate DateTime?      @map("vat_registration_issuing_date")
+  vatRegistrationExpiryDate DateTime?       @map("vat_registration_expiry_date")
+
+  // --- Chamber of Commerce & Industry Membership Details ---
+  chamberOfCommerceMembershipNumber String? @map("chamber_of_commerce_membership_number") @db.VarChar(100)
+  chamberOfCommerceRegistrationCity String? @map("chamber_of_commerce_registration_city") @db.VarChar(100)
+  chamberOfCommerceIssuingDate DateTime?    @map("chamber_of_commerce_issuing_date")
+  chamberOfCommerceExpiryDate  DateTime?    @map("chamber_of_commerce_expiry_date")
+
+  // --- Additional Government Permits and Licenses ---
+  civilDefenseLicenseNumber   String?       @map("civil_defense_license_number") @db.VarChar(50)
+  civilDefenseLicenseExpiryDate DateTime?   @map("civil_defense_license_expiry_date")
+  secRegistrationNumber       String?       @map("sec_registration_number") @db.VarChar(50)
+  secRegistrationType         SecRegistrationType? @map("sec_registration_type")
+  momraLicenseNumber          String?       @map("momra_license_number") @db.VarChar(50) // Ministry of Municipalities and Housing
+
+  // --- Financial Requirement ---
+  iban                    String?           @map("iban") @db.VarChar(34)
+
+  // --- [Authorized Signatory ---
+  authorizedSignatoryNationalId String?     @map("authorized_signatory_national_id") @db.VarChar(10)
+  authorizedSignatoryIdIssuingDate DateTime? @map("authorized_signatory_id_issuing_date")
+  authorizedSignatoryIdExpiryDate DateTime? @map("authorized_signatory_id_expiry_date")
+  authorizedSignatoryEmail    String?       @map("authorized_signatory_email") @db.VarChar(255)
+
+  // --- Authorized Contact Person ---
+  authorizedContactPersonNationalId String? @map("authorized_contact_person_national_id") @db.VarChar(10)
+  authorizedContactPersonIdIssuingDate DateTime? @map("authorized_contact_person_id_issuing_date")
+  authorizedContactPersonIdExpiryDate DateTime? @map("authorized_contact_person_id_expiry_date")
+  authorizedContactPersonEmail    String?   @map("authorized_contact_person_email") @db.VarChar(255)
+
+  // --- Service Agreement / Warranty / Selling Agreement / NDA ---
+  agreedToServiceAgreement    Boolean       @default(false) @map("agreed_to_service_agreement")
+  agreedToWarrantyObligation  Boolean       @default(false) @map("agreed_to_warranty_obligation")
+  agreedToSellingAgreement    Boolean       @default(false) @map("agreed_to_selling_agreement")
+  agreedToNda                 Boolean       @default(false) @map("agreed_to_nda")
+
+  // --- Profile Fields (Can be merged or used for other purposes) ---
+  businessType            BusinessType      @default(individual) @map("business_type")
   email                   String            @db.VarChar(255)
   phone                   String            @db.VarChar(20)
   whatsapp                String?           @db.VarChar(20)
   website                 String?           @db.VarChar(255)
-
-  // --- Address Information ---
   addressLine1            String            @map("address_line1") @db.VarChar(255)
   addressLine2            String?           @map("address_line2") @db.VarChar(255)
   city                    String            @db.VarChar(100)
   region                  String            @db.VarChar(100)
   postalCode              String?           @map("postal_code") @db.VarChar(20)
   country                 String            @default("Saudi Arabia") @db.VarChar(100)
-
-  // --- GPS Coordinates ---
   latitude                Decimal?          @db.Decimal(10, 8)
   longitude               Decimal?          @db.Decimal(11, 8)
-
-  // --- Business Details ---
   establishedYear         Int?              @map("established_year")
   employeeCount           Int?              @map("employee_count")
   description             String?
   descriptionAr           String?           @map("description_ar")
-
-  // --- Service Information ---
   serviceCategories       ServiceCategory[] @default([residential_solar]) @map("service_categories")
   serviceAreas            String[]          @default(["Riyadh"]) @map("service_areas")
   yearsExperience         Int               @default(1) @map("years_experience")
-
-  // --- Contractor Type & Capabilities ---
   contractorType          ContractorType    @default(full_solar_contractor) @map("contractor_type")
   canInstall              Boolean           @default(true) @map("can_install")
   canSupplyOnly           Boolean           @default(false) @map("can_supply_only")
-
-  // --- Status and Verification ---
   status                  ContractorStatus  @default(pending)
   verificationLevel       Int               @default(0) @map("verification_level")
   adminVerifiedAt         DateTime?         @map("admin_verified_at")
   adminVerifiedBy         String?           @map("admin_verified_by") @db.Uuid
-
-  // --- Performance Metrics ---
   totalProjects           Int               @default(0) @map("total_projects")
   completedProjects       Int               @default(0) @map("completed_projects")
   averageRating           Decimal           @default(0.00) @map("average_rating") @db.Decimal(3, 2)
   totalReviews            Int               @default(0) @map("total_reviews")
   responseTimeHours       Decimal?          @map("response_time_hours") @db.Decimal(5, 2)
-
-  // --- Financial Information (SAMA Compliance) ---
   bankAccountVerified     Boolean           @default(false) @map("bank_account_verified")
   taxClearanceVerified    Boolean           @default(false) @map("tax_clearance_verified")
   financialStandingVerified Boolean         @default(false) @map("financial_standing_verified")
-
-  // --- Preferences ---
   preferredLanguage       String            @default("ar") @map("preferred_language") @db.VarChar(10)
   emailNotifications      Boolean           @default(true) @map("email_notifications")
   smsNotifications        Boolean           @default(true) @map("sms_notifications")
   marketingConsent        Boolean           @default(false) @map("marketing_consent")
-
+  
   // --- System Fields ---
   createdAt               DateTime          @default(now()) @map("created_at")
   updatedAt               DateTime          @updatedAt @map("updated_at")
@@ -221,8 +308,95 @@ model ContractorProfile {
   // --- Relation to Auth Model ---
   contractor              Contractor        @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  @@map("contractors_profiles") 
+  @@map("contractors_profiles")
 }
+
+
+// model ContractorProfile {
+//   id                      String            @id @default(uuid()) @db.Uuid
+//   userId                  String            @unique @map("user_id") @db.Uuid // Foreign key to the Contractor auth model
+  
+//   // --- Basic Information ---
+//   businessName            String            @map("business_name") @db.VarChar(255)
+//   businessNameAr          String?           @map("business_name_ar") @db.VarChar(255)
+//   businessType            BusinessType      @default(individual) @map("business_type")
+//   commercialRegistration  String?           @map("commercial_registration") @db.VarChar(100)
+//   vatNumber               String?           @map("vat_number") @db.VarChar(20)
+
+//   // --- Contact Information ---
+//   email                   String            @db.VarChar(255)
+//   phone                   String            @db.VarChar(20)
+//   whatsapp                String?           @db.VarChar(20)
+//   website                 String?           @db.VarChar(255)
+
+//   // --- Address Information ---
+//   addressLine1            String            @map("address_line1") @db.VarChar(255)
+//   addressLine2            String?           @map("address_line2") @db.VarChar(255)
+//   city                    String            @db.VarChar(100)
+//   region                  String            @db.VarChar(100)
+//   postalCode              String?           @map("postal_code") @db.VarChar(20)
+//   country                 String            @default("Saudi Arabia") @db.VarChar(100)
+
+//   // --- GPS Coordinates ---
+//   latitude                Decimal?          @db.Decimal(10, 8)
+//   longitude               Decimal?          @db.Decimal(11, 8)
+
+//   // --- Business Details ---
+//   establishedYear         Int?              @map("established_year")
+//   employeeCount           Int?              @map("employee_count")
+//   description             String?
+//   descriptionAr           String?           @map("description_ar")
+
+//   // --- Service Information ---
+//   serviceCategories       ServiceCategory[] @default([residential_solar]) @map("service_categories")
+//   serviceAreas            String[]          @default(["Riyadh"]) @map("service_areas")
+//   yearsExperience         Int               @default(1) @map("years_experience")
+
+//   // --- Contractor Type & Capabilities ---
+//   contractorType          ContractorType    @default(full_solar_contractor) @map("contractor_type")
+//   canInstall              Boolean           @default(true) @map("can_install")
+//   canSupplyOnly           Boolean           @default(false) @map("can_supply_only")
+
+//   // --- Status and Verification ---
+//   status                  ContractorStatus  @default(pending)
+//   verificationLevel       Int               @default(0) @map("verification_level")
+//   adminVerifiedAt         DateTime?         @map("admin_verified_at")
+//   adminVerifiedBy         String?           @map("admin_verified_by") @db.Uuid
+
+//   // --- Performance Metrics ---
+//   totalProjects           Int               @default(0) @map("total_projects")
+//   completedProjects       Int               @default(0) @map("completed_projects")
+//   averageRating           Decimal           @default(0.00) @map("average_rating") @db.Decimal(3, 2)
+//   totalReviews            Int               @default(0) @map("total_reviews")
+//   responseTimeHours       Decimal?          @map("response_time_hours") @db.Decimal(5, 2)
+
+//   // --- Financial Information (SAMA Compliance) ---
+//   bankAccountVerified     Boolean           @default(false) @map("bank_account_verified")
+//   taxClearanceVerified    Boolean           @default(false) @map("tax_clearance_verified")
+//   financialStandingVerified Boolean         @default(false) @map("financial_standing_verified")
+
+//   // --- Preferences ---
+//   preferredLanguage       String            @default("ar") @map("preferred_language") @db.VarChar(10)
+//   emailNotifications      Boolean           @default(true) @map("email_notifications")
+//   smsNotifications        Boolean           @default(true) @map("sms_notifications")
+//   marketingConsent        Boolean           @default(false) @map("marketing_consent")
+
+//   // --- System Fields ---
+//   createdAt               DateTime          @default(now()) @map("created_at")
+//   updatedAt               DateTime          @updatedAt @map("updated_at")
+//   deletedAt               DateTime?         @map("deleted_at")
+
+//   // --- Audit Fields ---
+//   createdBy               String?           @map("created_by") @db.Uuid
+//   updatedBy               String?           @map("updated_by") @db.Uuid
+//   ipAddress               String?           @map("ip_address") @db.Inet
+//   userAgent               String?           @map("user_agent")
+
+//   // --- Relation to Auth Model ---
+//   contractor              Contractor        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+//   @@map("contractors_profiles") 
+// }
 
 
 model ContractorSession {

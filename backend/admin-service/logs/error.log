@@ -1,0 +1,8 @@
+{"email":"admin@yopmail.com","error":"Cannot read properties of undefined (reading 'findUnique')","level":"error","message":"Admin registration failed:","service":"admin-service","timestamp":"2025-09-26T07:53:39.074Z"}
+{"email":"admin@yopmail.com","error":"Cannot read properties of undefined (reading 'findUnique')","ip":"::1","level":"error","message":"Admin registration error:","service":"admin-service","timestamp":"2025-09-26T07:53:39.078Z"}
+{"email":"admin@yopmail.com","error":"Cannot read properties of undefined (reading 'findUnique')","level":"error","message":"Admin registration failed:","service":"admin-service","timestamp":"2025-09-26T07:53:52.772Z"}
+{"email":"admin@yopmail.com","error":"Cannot read properties of undefined (reading 'findUnique')","ip":"::1","level":"error","message":"Admin registration error:","service":"admin-service","timestamp":"2025-09-26T07:53:52.776Z"}
+{"email":"admin@yopmail.com","error":"Invalid email or password","level":"error","message":"Admin login failed:","service":"admin-service","timestamp":"2025-09-26T07:57:58.633Z"}
+{"email":"admin@yopmail.com","error":"Invalid email or password","ip":"::1","level":"error","message":"Admin login error:","service":"admin-service","timestamp":"2025-09-26T07:57:58.635Z"}
+{"email":"manager@yopmail.com","error":"Invalid email or password","level":"error","message":"Admin login failed:","service":"admin-service","timestamp":"2025-09-26T08:33:43.152Z"}
+{"email":"manager@yopmail.com","error":"Invalid email or password","ip":"::1","level":"error","message":"Admin login error:","service":"admin-service","timestamp":"2025-09-26T08:33:43.154Z"}

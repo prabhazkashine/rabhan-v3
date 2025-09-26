@@ -166,8 +166,8 @@ class AuthService {
   }
 
   async loginUser(data: LoginRequest): Promise<AuthResponse> {
-    const MAX_LOGIN_ATTEMPTS = 5;
-    const LOCK_TIME = 15 * 60 * 1000; 
+    const MAX_LOGIN_ATTEMPTS = Number(process.env.MAX_LOGIN_ATTEMPTS);
+    const LOCK_TIME = Number(process.env.LOCK_TIME); 
 
     try {
       await this.prisma.$connect();

@@ -1,0 +1,273 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Enums defined from database custom types
+enum DocumentStatus {
+  pending
+  processing
+  validated
+  approved
+  rejected
+  expired
+  archived
+}
+
+enum ApprovalStatus {
+  pending
+  approved
+  rejected
+  under_review
+}
+
+enum StorageProvider {
+  minio
+  s3
+  local
+}
+
+enum AccessType {
+  view
+  download
+  update
+  delete
+  approve
+  reject
+}
+
+enum EventCategory {
+  SECURITY
+  COMPLIANCE
+  BUSINESS
+  OPERATIONAL
+}
+
+enum Severity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+// Models translated from database tables
+model DocumentCategory {
+  id                String             @id @default(uuid()) @db.Uuid
+  name              String             @unique @db.VarChar(100)
+  description       String?
+  requiredForRole   String             @map("required_for_role") @db.VarChar(50)
+  maxFileSizeMb     Int                @default(10) @map("max_file_size_mb")
+  allowedFormats    String[]           @default(["pdf", "jpg", "jpeg", "png"]) @map("allowed_formats")
+  retentionYears    Int                @default(7) @map("retention_years")
+  isActive          Boolean            @default(true) @map("is_active")
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
+  documents         Document[]
+  documentTemplates DocumentTemplate[]
+
+  @@map("document_categories")
+}
+
+model DocumentTemplate {
+  id               String           @id @default(uuid()) @db.Uuid
+  categoryId       String           @map("category_id") @db.Uuid
+  name             String           @db.VarChar(200)
+  description      String?
+  validationRules  Json             @default("{}") @map("validation_rules")
+  approvalWorkflow Json             @default("{}") @map("approval_workflow")
+  isActive         Boolean          @default(true) @map("is_active")
+  createdAt        DateTime         @default(now()) @map("created_at")
+  updatedAt        DateTime         @updatedAt @map("updated_at")
+  category         DocumentCategory @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  documents        Document[]
+
+  @@unique([categoryId, name])
+  @@map("document_templates")
+}
+
+model Document {
+  id                   String               @id @default(uuid()) @db.Uuid
+  userId               String               @map("user_id") @db.Uuid
+  categoryId           String               @map("category_id") @db.Uuid
+  templateId           String?              @map("template_id") @db.Uuid
+  originalFilename     String               @map("original_filename") @db.VarChar(255)
+  fileSizeBytes        BigInt               @map("file_size_bytes")
+  mimeType             String               @map("mime_type") @db.VarChar(100)
+  fileHash             String               @unique @map("file_hash") @db.VarChar(64)
+  fileExtension        String               @map("file_extension") @db.VarChar(10)
+  storageProvider      StorageProvider      @default(minio) @map("storage_provider")
+  storageBucket        String               @map("storage_bucket") @db.VarChar(100)
+  storagePath          String               @map("storage_path") @db.VarChar(500)
+  storageRegion        String?              @default("ksa-central") @map("storage_region") @db.VarChar(50)
+  encryptionKeyId      String               @map("encryption_key_id") @db.VarChar(100)
+  encryptionAlgorithm  String?              @default("AES-256-GCM") @map("encryption_algorithm") @db.VarChar(50)
+  status               DocumentStatus       @default(pending)
+  uploadIpAddress      String?              @map("upload_ip_address") @db.Inet
+  uploadUserAgent      String?              @map("upload_user_agent")
+  uploadSessionId      String?              @map("upload_session_id") @db.VarChar(100)
+  validationResults    Json?                @default("{}") @map("validation_results")
+  validationScore      Decimal?             @default(0.0) @map("validation_score") @db.Decimal(5, 2)
+  validationCompletedAt DateTime?           @map("validation_completed_at")
+  validationErrors     String[]             @map("validation_errors")
+  extractedText        String?              @map("extracted_text")
+  extractedData        Json?                @default("{}") @map("extracted_data")
+  ocrConfidence        Decimal?             @default(0.0) @map("ocr_confidence") @db.Decimal(5, 2)
+  approvalStatus       ApprovalStatus?      @default(pending) @map("approval_status")
+  approvedBy           String?              @map("approved_by") @db.Uuid
+  approvedAt           DateTime?            @map("approved_at")
+  approvalNotes        String?              @map("approval_notes")
+  rejectionReason      String?              @map("rejection_reason")
+  createdAt            DateTime             @default(now()) @map("created_at")
+  updatedAt            DateTime             @updatedAt @map("updated_at")
+  expiresAt            DateTime?            @map("expires_at")
+  archivedAt           DateTime?            @map("archived_at")
+  samaAuditLog         Json                 @default("[]") @map("sama_audit_log")
+  accessLog            Json                 @default("[]") @map("access_log")
+  complianceFlags      Json?                @default("{}") @map("compliance_flags")
+  virusScanStatus      String?              @default("pending") @map("virus_scan_status") @db.VarChar(20)
+  virusScanCompletedAt DateTime?            @map("virus_scan_completed_at")
+  category             DocumentCategory     @relation(fields: [categoryId], references: [id])
+  template             DocumentTemplate?    @relation(fields: [templateId], references: [id])
+  versions             DocumentVersion[]
+  accessLogs           DocumentAccessLog[]
+  approvalWorkflows    ApprovalWorkflow[]
+  tags                 DocumentTag[]
+  virusScanResults     VirusScanResult[]
+
+  @@index([userId, status])
+  @@index([categoryId, createdAt(sort: Desc)])
+  @@index([approvalStatus])
+  @@index([expiresAt])
+  @@index([status, createdAt(sort: Desc)])
+  @@index([virusScanStatus])
+  @@map("documents")
+}
+
+model DocumentVersion {
+  id            String   @id @default(uuid()) @db.Uuid
+  documentId    String   @map("document_id") @db.Uuid
+  versionNumber Int      @map("version_number")
+  storagePath   String   @map("storage_path") @db.VarChar(500)
+  fileHash      String   @map("file_hash") @db.VarChar(64)
+  fileSizeBytes BigInt   @map("file_size_bytes")
+  createdAt     DateTime @default(now()) @map("created_at")
+  createdBy     String   @map("created_by") @db.Uuid
+  changeReason  String?  @map("change_reason")
+  document      Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, versionNumber])
+  @@map("document_versions")
+}
+
+model DocumentAccessLog {
+  id                  String    @id @default(uuid()) @db.Uuid
+  documentId          String    @map("document_id") @db.Uuid
+  userId              String    @map("user_id") @db.Uuid
+  accessType          AccessType @map("access_type")
+  ipAddress           String?   @map("ip_address") @db.Inet
+  userAgent           String?   @map("user_agent")
+  sessionId           String?   @map("session_id") @db.VarChar(100)
+  success             Boolean   @default(true)
+  failureReason       String?   @map("failure_reason")
+  accessDetails       Json?     @default("{}") @map("access_details")
+  createdAt           DateTime  @default(now()) @map("created_at")
+  samaEventId         String?   @map("sama_event_id") @db.VarChar(100)
+  samaComplianceFlags Json?     @default("{}") @map("sama_compliance_flags")
+  retentionUntil      DateTime? @map("retention_until") @db.Date
+  document            Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("document_access_log")
+}
+
+model ApprovalWorkflow {
+  id                  String   @id @default(uuid()) @db.Uuid
+  documentId          String   @map("document_id") @db.Uuid
+  workflowDefinition  Json     @default("{}") @map("workflow_definition")
+  currentStep         Int      @default(1) @map("current_step")
+  totalSteps          Int      @default(1) @map("total_steps")
+  status              String   @default("active") @db.VarChar(50)
+  assignedTo          String[] @map("assigned_to") @db.Uuid
+  startedAt           DateTime @default(now()) @map("started_at")
+  completedAt         DateTime? @map("completed_at")
+  stepHistory         Json     @default("[]") @map("step_history")
+  samaComplianceLog   Json     @default("[]") @map("sama_compliance_log")
+  document            Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+  @@map("approval_workflows")
+}
+
+model DocumentTag {
+  id        String   @id @default(uuid()) @db.Uuid
+  documentId String   @map("document_id") @db.Uuid
+  tagName   String   @map("tag_name") @db.VarChar(100)
+  tagValue  String?  @map("tag_value") @db.VarChar(200)
+  createdAt DateTime @default(now()) @map("created_at")
+  createdBy String?  @map("created_by") @db.Uuid
+  document  Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, tagName])
+  @@map("document_tags")
+}
+
+model VirusScanResult {
+  id                     String    @id @default(uuid()) @db.Uuid
+  documentId             String    @map("document_id") @db.Uuid
+  scannerName            String    @map("scanner_name") @db.VarChar(50)
+  scanResult             String    @map("scan_result") @db.VarChar(50)
+  threatNames            String[]  @map("threat_names")
+  scanDurationMs         Int?      @map("scan_duration_ms")
+  scannerVersion         String?   @map("scanner_version") @db.VarChar(50)
+  signatureVersion       String?   @map("signature_version") @db.VarChar(50)
+  scanDetails            Json?     @default("{}") @map("scan_details")
+  scannedAt              DateTime  @default(now()) @map("scanned_at")
+  samaSecurityEventId    String?   @map("sama_security_event_id") @db.VarChar(100)
+  samaNotificationSent   Boolean?  @default(false) @map("sama_notification_sent")
+  samaNotificationSentAt DateTime? @map("sama_notification_sent_at")
+  document               Document  @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@index([documentId, scannedAt(sort: Desc)])
+  @@map("virus_scan_results")
+}
+
+model SamaAuditEvent {
+  id                      String        @id @default(uuid()) @db.Uuid
+  eventType               String        @map("event_type") @db.VarChar(100)
+  eventCategory           EventCategory @map("event_category")
+  severity                Severity
+  userId                  String?       @map("user_id") @db.Uuid
+  documentId              String?       @map("document_id") @db.Uuid
+  ipAddress               String?       @map("ip_address") @db.Inet
+  userAgent               String?       @map("user_agent")
+  sessionId               String?       @map("session_id") @db.VarChar(100)
+  eventData               Json          @default("{}") @map("event_data")
+  correlationId           String?       @map("correlation_id") @db.VarChar(100)
+  requestId               String?       @map("request_id") @db.VarChar(100)
+  samaControlReference    String?       @map("sama_control_reference") @db.VarChar(50)
+  complianceStatus        String        @default("compliant") @map("compliance_status") @db.VarChar(50)
+  createdAt               DateTime      @default(now()) @map("created_at")
+  processedAt             DateTime?     @map("processed_at")
+  retentionUntil          DateTime?     @map("retention_until") @db.Date
+  samaNotificationRequired Boolean?     @default(false) @map("sama_notification_required")
+  samaNotificationSent    Boolean?      @default(false) @map("sama_notification_sent")
+  samaNotificationSentAt  DateTime?     @map("sama_notification_sent_at")
+
+  @@index([createdAt(sort: Desc)])
+  @@index([eventType, createdAt(sort: Desc)])
+  @@index([severity, createdAt(sort: Desc)])
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("sama_audit_events")
+}

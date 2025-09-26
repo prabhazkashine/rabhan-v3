@@ -160,7 +160,7 @@ model UserProfile {
   roofSize            Decimal     @map("roof_size") @db.Decimal(10, 2)
   gpsLatitude         Decimal     @map("gps_latitude") @db.Decimal(10, 8)
   gpsLongitude        Decimal     @map("gps_longitude") @db.Decimal(11, 8)
-  electricityConsumption ElectricityConsumptionRange @map("electricity_consumption")
+  electricityConsumption String   @db.VarChar(255)
   electricityMeterNumber String   @map("electricity_meter_number") @db.VarChar(50)
 
   // Employment Information (for BNPL eligibility)

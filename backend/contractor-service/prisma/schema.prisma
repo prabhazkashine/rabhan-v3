@@ -13,3 +13,256 @@ datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
+
+
+
+// = an===========================================
+// ENUMS (Updated with Contractor-related values)
+// =============================================
+
+enum AuthProvider {
+  EMAIL
+  NAFATH // Kept in case you add other login methods later
+}
+
+enum UserStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  LOCKED
+  DELETED // Added from SQL schema
+}
+
+enum VerificationType {
+  EMAIL
+  PASSWORD_RESET
+  PHONE // Added from SQL schema
+}
+
+enum VerificationStatus {
+  PENDING
+  VERIFIED
+  EXPIRED
+  FAILED
+}
+
+// =============================================
+// CONTRACTOR PROFILE ENUMS (Newly Added)
+// =============================================
+
+enum ContractorStatus {
+  pending
+  documents_required
+  verification
+  verified
+  active
+  suspended
+  rejected
+  inactive
+}
+
+enum BusinessType {
+  individual
+  llc
+  corporation
+  partnership
+  other
+}
+
+enum ServiceCategory {
+  residential_solar
+  commercial_solar
+  industrial_solar
+  maintenance
+  consultation
+  design
+  electrical
+  roofing
+  all
+}
+
+enum ContractorType {
+  full_solar_contractor
+  solar_vendor_only
+}
+
+
+// =============================================
+// CONTRACTOR MODELS
+// =============================================
+
+model Contractor {
+  id            String   @id @default(uuid()) @db.Uuid
+  firstName     String?  @map("first_name") @db.VarChar(100)
+  lastName      String?  @map("last_name") @db.VarChar(100)
+  email         String   @unique @db.VarChar(255)
+  passwordHash  String?  @map("password_hash") @db.VarChar(255)
+  phone         String?  @db.VarChar(20)
+  nationalId    String?  @unique @map("national_id") @db.VarChar(10)
+
+  // --- Business Information ---
+  companyName   String   @default("To be updated") @map("company_name") @db.VarChar(255)
+  crNumber      String?  @map("cr_number") @db.VarChar(50)
+  vatNumber     String?  @map("vat_number") @db.VarChar(20)
+  businessType  String   @default("individual") @map("business_type") @db.VarChar(50)
+
+  // --- Auth & Status Fields ---
+  provider      AuthProvider @default(EMAIL)
+  status        UserStatus   @default(PENDING)
+
+  // --- Security & Login Fields ---
+  emailVerified   Boolean   @default(false) @map("email_verified")
+  emailVerifiedAt DateTime? @map("email_verified_at")
+  phoneVerified   Boolean   @default(false) @map("phone_verified")
+  phoneVerifiedAt DateTime? @map("phone_verified_at")
+  loginAttempts   Int       @default(0) @map("login_attempts")
+  lockedUntil     DateTime? @map("locked_until")
+  lastLoginAt     DateTime? @map("last_login_at")
+
+  // --- SAMA Compliance ---
+  samaVerified        Boolean   @default(false) @map("sama_verified")
+  samaVerificationDate DateTime? @map("sama_verification_date")
+
+  // --- Timestamps ---
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+
+  // --- Relations ---
+  sessions                 ContractorSession[]
+  passwordResetTokens      PasswordResetToken[]
+  verificationTokens       VerificationToken[]
+
+  profile                  ContractorProfile? 
+
+  @@map("contractors")
+}
+
+
+model ContractorProfile {
+  id                      String            @id @default(uuid()) @db.Uuid
+  userId                  String            @unique @map("user_id") @db.Uuid // Foreign key to the Contractor auth model
+  
+  // --- Basic Information ---
+  businessName            String            @map("business_name") @db.VarChar(255)
+  businessNameAr          String?           @map("business_name_ar") @db.VarChar(255)
+  businessType            BusinessType      @default(individual) @map("business_type")
+  commercialRegistration  String?           @map("commercial_registration") @db.VarChar(100)
+  vatNumber               String?           @map("vat_number") @db.VarChar(20)
+
+  // --- Contact Information ---
+  email                   String            @db.VarChar(255)
+  phone                   String            @db.VarChar(20)
+  whatsapp                String?           @db.VarChar(20)
+  website                 String?           @db.VarChar(255)
+
+  // --- Address Information ---
+  addressLine1            String            @map("address_line1") @db.VarChar(255)
+  addressLine2            String?           @map("address_line2") @db.VarChar(255)
+  city                    String            @db.VarChar(100)
+  region                  String            @db.VarChar(100)
+  postalCode              String?           @map("postal_code") @db.VarChar(20)
+  country                 String            @default("Saudi Arabia") @db.VarChar(100)
+
+  // --- GPS Coordinates ---
+  latitude                Decimal?          @db.Decimal(10, 8)
+  longitude               Decimal?          @db.Decimal(11, 8)
+
+  // --- Business Details ---
+  establishedYear         Int?              @map("established_year")
+  employeeCount           Int?              @map("employee_count")
+  description             String?
+  descriptionAr           String?           @map("description_ar")
+
+  // --- Service Information ---
+  serviceCategories       ServiceCategory[] @default([residential_solar]) @map("service_categories")
+  serviceAreas            String[]          @default(["Riyadh"]) @map("service_areas")
+  yearsExperience         Int               @default(1) @map("years_experience")
+
+  // --- Contractor Type & Capabilities ---
+  contractorType          ContractorType    @default(full_solar_contractor) @map("contractor_type")
+  canInstall              Boolean           @default(true) @map("can_install")
+  canSupplyOnly           Boolean           @default(false) @map("can_supply_only")
+
+  // --- Status and Verification ---
+  status                  ContractorStatus  @default(pending)
+  verificationLevel       Int               @default(0) @map("verification_level")
+  adminVerifiedAt         DateTime?         @map("admin_verified_at")
+  adminVerifiedBy         String?           @map("admin_verified_by") @db.Uuid
+
+  // --- Performance Metrics ---
+  totalProjects           Int               @default(0) @map("total_projects")
+  completedProjects       Int               @default(0) @map("completed_projects")
+  averageRating           Decimal           @default(0.00) @map("average_rating") @db.Decimal(3, 2)
+  totalReviews            Int               @default(0) @map("total_reviews")
+  responseTimeHours       Decimal?          @map("response_time_hours") @db.Decimal(5, 2)
+
+  // --- Financial Information (SAMA Compliance) ---
+  bankAccountVerified     Boolean           @default(false) @map("bank_account_verified")
+  taxClearanceVerified    Boolean           @default(false) @map("tax_clearance_verified")
+  financialStandingVerified Boolean         @default(false) @map("financial_standing_verified")
+
+  // --- Preferences ---
+  preferredLanguage       String            @default("ar") @map("preferred_language") @db.VarChar(10)
+  emailNotifications      Boolean           @default(true) @map("email_notifications")
+  smsNotifications        Boolean           @default(true) @map("sms_notifications")
+  marketingConsent        Boolean           @default(false) @map("marketing_consent")
+
+  // --- System Fields ---
+  createdAt               DateTime          @default(now()) @map("created_at")
+  updatedAt               DateTime          @updatedAt @map("updated_at")
+  deletedAt               DateTime?         @map("deleted_at")
+
+  // --- Audit Fields ---
+  createdBy               String?           @map("created_by") @db.Uuid
+  updatedBy               String?           @map("updated_by") @db.Uuid
+  ipAddress               String?           @map("ip_address") @db.Inet
+  userAgent               String?           @map("user_agent")
+
+  // --- Relation to Auth Model ---
+  contractor              Contractor        @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("contractors_profiles") 
+}
+
+
+model ContractorSession {
+  id             String   @id @default(uuid()) @db.Uuid
+  contractorId   String   @map("contractor_id") @db.Uuid
+  refreshToken   String   @unique @map("refresh_token") @db.VarChar(500)
+  deviceId       String?  @map("device_id") @db.VarChar(255)
+  userAgent      String?  @map("user_agent")
+  ipAddress      String?  @map("ip_address") @db.Inet
+  expiresAt      DateTime @map("expires_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+  lastAccessedAt DateTime @default(now()) @map("last_accessed_at")
+
+  contractor Contractor @relation(fields: [contractorId], references: [id], onDelete: Cascade)
+
+  @@map("contractor_sessions")
+}
+
+
+model PasswordResetToken {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  token     String   @unique @db.VarChar(255)
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user Contractor @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("password_reset_tokens")
+}
+
+model VerificationToken {
+  id          String           @id @default(uuid()) @db.Uuid
+  userId      String           @map("user_id") @db.Uuid
+  type        VerificationType // Will be EMAIL for registration
+  token       String           @unique @db.VarChar(255)
+  expiresAt   DateTime         @map("expires_at")
+  createdAt   DateTime         @default(now()) @map("created_at")
+
+  user Contractor @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("verification_tokens")
+}

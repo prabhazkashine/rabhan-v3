@@ -9,7 +9,8 @@ export const RESOURCE_PERMISSIONS: Record<ResourceType, PermissionAction[]> = {
   [ResourceType.USERS]: [PermissionAction.READ, PermissionAction.WRITE, PermissionAction.UPDATE, PermissionAction.DELETE],
   [ResourceType.CONTRACTORS]: [PermissionAction.READ, PermissionAction.WRITE, PermissionAction.UPDATE, PermissionAction.DELETE],
   [ResourceType.QUOTATIONS]: [PermissionAction.READ, PermissionAction.UPDATE], // Only read and update
-  [ResourceType.PRODUCTS]: [PermissionAction.READ, PermissionAction.UPDATE]  // Only read and update
+  [ResourceType.PRODUCTS]: [PermissionAction.READ, PermissionAction.UPDATE],  // Only read and update,
+  [ResourceType.DOCUMENTS]: [PermissionAction.READ, PermissionAction.WRITE]  // Only read and update
 };
 
 export interface PermissionCheck {

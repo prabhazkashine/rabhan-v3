@@ -1,5 +1,6 @@
 import { Router, RequestHandler } from 'express';
 import { createProxyMiddleware, RequestHandler as HpmRequestHandler } from 'http-proxy-middleware';
+import { autoPermissionCheck } from '../middleware/permissionMiddleware';
 
 const DOCUMENT_SERVICE_URL = process.env.DOCUMENT_SERVICE_URL;
 
@@ -27,12 +28,28 @@ const userAuth: RequestHandler = (req, res, next) => {
 
 const documentRouter = Router();
 
-documentRouter.use('/document-categories', userAuth, createProxy(DOCUMENT_SERVICE_URL!, {
-    '^/': '/api/document-categories/', 
-}));
+// Create proxy for document service
+const documentProxy = createProxy(DOCUMENT_SERVICE_URL!, {
+    '^/': '/api/documents/',
+});
 
-documentRouter.use('/documents', userAuth, createProxy(DOCUMENT_SERVICE_URL!, {
-    '^/': '/api/documents/', 
-}));
+const categoryProxy = createProxy(DOCUMENT_SERVICE_URL!, {
+    '^/': '/api/document-categories/',
+});
+
+
+
+documentRouter.use('/documents',
+    userAuth,
+    autoPermissionCheck("DOCUMENTS"),
+    documentProxy
+);
+
+
+documentRouter.use('/document-categories',
+    userAuth,
+    autoPermissionCheck("DOCUMENTS"),
+    categoryProxy
+);
 
 export default documentRouter;

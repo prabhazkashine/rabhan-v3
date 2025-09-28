@@ -48,6 +48,7 @@ enum ResourceType {
   CONTRACTORS
   QUOTATIONS
   PRODUCTS
+  DOCUMENTS
 }
 
 enum PermissionAction {

@@ -3,8 +3,10 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 import { createProxyMiddleware, Filter, Options, RequestHandler } from 'http-proxy-middleware';
 import { authenticateToken } from './middleware/authMiddleware';
+import { createPermissionMiddleware } from './middleware/dynamicPermissionMiddleware';
 import adminRouter from './routes/adminRoutes';
 import documentRouter from './routes/documentRoutes';
+import productRouter from './routes/productRoutes';
 
 const app = express();
 const PORT = process.env.API_GATEWAY_PORT || 8000;
@@ -31,12 +33,8 @@ app.use('/api/vendors/auth', createProxy(VENDOR_SERVICE_URL!));
 app.use('/api/admin/auth', createProxy(ADMIN_SERVICE_URL!));
 
 
-app.use('/api/products', (req, res, next) => {
-    if (!req.headers['x-user-role']) {
-        return res.status(401).send('Unauthorized: Please log in.');
-    }
-    next();
-}, createProxy(PRODUCT_SERVICE_URL!));
+// Use permission-based product router
+// app.use('/api', productRouter);
 
 
 app.use('/api', documentRouter);

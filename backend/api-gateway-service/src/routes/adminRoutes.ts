@@ -1,5 +1,6 @@
 import { Router, RequestHandler } from 'express';
 import { createProxyMiddleware, RequestHandler as HpmRequestHandler } from 'http-proxy-middleware';
+import { autoPermissionCheck } from '../middleware/permissionMiddleware';
 
 const ADMIN_SERVICE_URL = process.env.ADMIN_SERVICE_URL;
 
@@ -40,16 +41,36 @@ const adminAuth: RequestHandler = (req, res, next) => {
 
 const adminRouter = Router();
 
-adminRouter.use('/admins', superAdminAuth, createProxy(ADMIN_SERVICE_URL!, {
-    '^/': '/api/admins/', 
-}));
+const adminProxy = createProxy(ADMIN_SERVICE_URL!, {
+    '^/': '/api/admins/',
+});
 
-adminRouter.use('/roles', superAdminAuth, createProxy(ADMIN_SERVICE_URL!, {
-    '^/': '/api/roles/', 
-}));
+const rolesProxy = createProxy(ADMIN_SERVICE_URL!, {
+    '^/': '/api/roles/',
+});
 
-adminRouter.use('/permissions', adminAuth, createProxy(ADMIN_SERVICE_URL!, {
-    '^/': '/api/permissions/', 
-}));
+const permissionsProxy = createProxy(ADMIN_SERVICE_URL!, {
+    '^/': '/api/permissions/',
+});
+
+
+adminRouter.use('/admins',
+    superAdminAuth,
+    autoPermissionCheck("ADMINS"),
+    adminProxy
+);
+
+
+adminRouter.use('/roles',
+    superAdminAuth,
+    autoPermissionCheck("ROLES"),
+    rolesProxy
+);
+
+
+adminRouter.use('/permissions',
+    adminAuth,
+    permissionsProxy
+);
 
 export default adminRouter;

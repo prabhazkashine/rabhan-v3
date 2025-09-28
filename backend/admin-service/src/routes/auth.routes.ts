@@ -22,4 +22,8 @@ router.get('/profile',
   authController.getProfile
 );
 
+router.get('/verify',
+  authController.verify
+);
+
 export { router as authRoutes };

@@ -90,3 +90,21 @@
 {"categoryId":"e6713e5d-1b45-4272-9a4c-20bc8e703dbb","fileSize":58500,"filename":"51AVfrCaizL._AC_UF1000,1000_QL80_.jpg","level":"info","message":"Starting document upload process","service":"document-service","timestamp":"2025-09-26T11:55:02.315Z","userId":"d86090fa-4002-4bf8-bc27-6c5e2b84c4d2"}
 {"categoryId":"e6713e5d-1b45-4272-9a4c-20bc8e703dbb","documentId":"4250e9de-159e-40b2-b291-abedbf655e3a","filename":"51AVfrCaizL._AC_UF1000,1000_QL80_.jpg","level":"info","message":"Document upload completed successfully","processingTime":35,"service":"document-service","timestamp":"2025-09-26T11:55:02.350Z","userId":"d86090fa-4002-4bf8-bc27-6c5e2b84c4d2"}
 {"archivedDocuments":0,"categoryId":"e6713e5d-1b45-4272-9a4c-20bc8e703dbb","documentId":"4250e9de-159e-40b2-b291-abedbf655e3a","filename":"51AVfrCaizL._AC_UF1000,1000_QL80_.jpg","level":"info","message":"Document upload completed successfully","processingTime":40,"service":"document-service","timestamp":"2025-09-26T11:55:02.351Z","userId":"d86090fa-4002-4bf8-bc27-6c5e2b84c4d2","userType":"USER"}
+{"level":"info","message":"Document service is running on http://localhost:3004","service":"document-service","timestamp":"2025-09-28T10:02:17.500Z"}
+{"ip":"::1","level":"info","message":"Incoming request","method":"GET","service":"document-service","timestamp":"2025-09-28T10:12:10.522Z","url":"/","userAgent":"PostmanRuntime/7.48.0"}
+{"ip":"::1","level":"info","message":"Incoming request","method":"GET","service":"document-service","timestamp":"2025-09-28T10:13:09.145Z","url":"/api/document-categories","userAgent":"PostmanRuntime/7.48.0"}
+{"level":"info","message":"Fetching all document categories","service":"document-service","timestamp":"2025-09-28T10:13:09.147Z"}
+{"level":"info","message":"Fetching all document categories","service":"document-service","timestamp":"2025-09-28T10:13:09.153Z"}
+{"count":10,"level":"info","message":"Document categories fetched successfully","service":"document-service","timestamp":"2025-09-28T10:13:09.254Z"}
+{"count":10,"level":"info","message":"Document categories fetched successfully","service":"document-service","timestamp":"2025-09-28T10:13:09.255Z"}
+{"ip":"::1","level":"info","message":"Incoming request","method":"GET","service":"document-service","timestamp":"2025-09-28T10:15:52.538Z","url":"/","userAgent":"PostmanRuntime/7.48.0"}
+{"ip":"::1","level":"info","message":"Incoming request","method":"GET","service":"document-service","timestamp":"2025-09-28T10:19:28.160Z","url":"/","userAgent":"PostmanRuntime/7.48.0"}
+{"ip":"::1","level":"info","message":"Incoming request","method":"GET","service":"document-service","timestamp":"2025-09-28T10:19:30.580Z","url":"/","userAgent":"PostmanRuntime/7.48.0"}
+{"ip":"::1","level":"info","message":"Incoming request","method":"GET","service":"document-service","timestamp":"2025-09-28T10:23:13.993Z","url":"/","userAgent":"PostmanRuntime/7.48.0"}
+{"ip":"::1","level":"info","message":"Incoming request","method":"GET","service":"document-service","timestamp":"2025-09-28T10:26:28.360Z","url":"/","userAgent":"PostmanRuntime/7.48.0"}
+{"ip":"::1","level":"info","message":"Incoming request","method":"GET","service":"document-service","timestamp":"2025-09-28T10:26:48.179Z","url":"/","userAgent":"PostmanRuntime/7.48.0"}
+{"ip":"::1","level":"info","message":"Incoming request","method":"GET","service":"document-service","timestamp":"2025-09-28T10:27:50.308Z","url":"/api/document-categories","userAgent":"PostmanRuntime/7.48.0"}
+{"level":"info","message":"Fetching all document categories","service":"document-service","timestamp":"2025-09-28T10:27:50.308Z"}
+{"level":"info","message":"Fetching all document categories","service":"document-service","timestamp":"2025-09-28T10:27:50.309Z"}
+{"count":10,"level":"info","message":"Document categories fetched successfully","service":"document-service","timestamp":"2025-09-28T10:27:50.358Z"}
+{"count":10,"level":"info","message":"Document categories fetched successfully","service":"document-service","timestamp":"2025-09-28T10:27:50.358Z"}

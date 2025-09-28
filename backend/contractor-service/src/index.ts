@@ -53,6 +53,7 @@ app.get('/', (req, res) => {
       login: '/api/auth/contractor/login',
       refresh: '/api/auth/contractor/refresh',
       profile: '/api/auth/contractor/profile',
+      verify: '/api/auth/contractor/verify',
       sendOTP: '/api/auth/send-otp',
       verifyOTP: '/api/auth/verify-otp',
       contractorProfile: {

@@ -4,6 +4,7 @@ import { PhoneVerificationService } from '../services/phone-verification.service
 import { RegisterRequest, LoginRequest, UpdateProfileRequest } from '../validation/schemas';
 import { AuthenticatedRequest } from '../middleware/auth.middleware';
 import { logger } from '../utils/logger';
+import { JWTUtils } from '../utils/jwt';
 
 class AuthController {
   private authService: AuthService;
@@ -380,6 +381,69 @@ class AuthController {
           message: 'Failed to update profile'
         });
       }
+    }
+  };
+
+  verify = async (req: Request, res: Response): Promise<void> => {
+    try {
+      const authHeader = req.headers.authorization;
+
+      if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        res.status(401).json({
+          success: false,
+          message: 'Access token is required',
+          data: {
+            isValid: false
+          }
+        });
+        return;
+      }
+
+      const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+
+      try {
+        const payload = JWTUtils.verifyAccessToken(token);
+
+        res.status(200).json({
+          success: true,
+          message: 'Token is valid',
+          data: {
+            id: payload.userId,
+            email: payload.email,
+            role: payload.role,
+            sessionId: payload.sessionId,
+            isValid: true
+          }
+        });
+
+      } catch (tokenError) {
+        logger.warn('Invalid access token in verify endpoint:', {
+          error: tokenError instanceof Error ? tokenError.message : 'Unknown error',
+          ip: req.ip
+        });
+
+        res.status(401).json({
+          success: false,
+          message: 'Invalid or expired access token',
+          data: {
+            isValid: false
+          }
+        });
+      }
+
+    } catch (error) {
+      logger.error('Token verification error:', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        ip: req.ip
+      });
+
+      res.status(500).json({
+        success: false,
+        message: 'Token verification failed',
+        data: {
+          isValid: false
+        }
+      });
     }
   };
 }

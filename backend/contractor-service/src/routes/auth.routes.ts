@@ -39,4 +39,8 @@ router.post('/verify-otp',
   authController.verifyPhoneOTP
 );
 
+router.get('/verify',
+  authController.verify
+);
+
 export { router as authRoutes };

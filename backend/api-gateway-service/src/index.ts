@@ -3,13 +3,14 @@ import * as dotenv from 'dotenv';
 dotenv.config();
 import { createProxyMiddleware, Filter, Options, RequestHandler } from 'http-proxy-middleware';
 import { authenticateToken } from './middleware/authMiddleware';
+import adminRouter from './routes/adminRoutes';
+import documentRouter from './routes/documentRoutes';
 
 const app = express();
 const PORT = process.env.API_GATEWAY_PORT || 8000;
 
 const VENDOR_SERVICE_URL = process.env.VENDOR_SERVICE_URL;
 const PRODUCT_SERVICE_URL = process.env.PRODUCT_SERVICE_URL;
-const DOCUMENT_SERVICE_URL = process.env.DOCUMENT_SERVICE_URL;
 const ADMIN_SERVICE_URL = process.env.ADMIN_SERVICE_URL;
 const USER_SERVICE_URL = process.env.USER_SERVICE_URL;
 
@@ -38,37 +39,8 @@ app.use('/api/products', (req, res, next) => {
 }, createProxy(PRODUCT_SERVICE_URL!));
 
 
-app.use('/api/document-categories', (req, res, next) => {
-
-    if (!req.headers['x-user-role']) {
-        return res.status(401).send('Unauthorized: Please log in to access this resource.');
-    }
-
-    console.log(req.headers, 'rrrrrrrr');
-
-    next();
-}, createProxy(DOCUMENT_SERVICE_URL!, {
-    '^/': '/api/document-categories',
-}));
-
-
-app.use('/api/documents', (req, res, next) => {
-    if (!req.headers['x-user-role']) {
-        return res.status(401).send('Unauthorized: Please log in to access this resource.');
-    }
-    next();
-}, createProxy(DOCUMENT_SERVICE_URL!, {
-    '^/api/documents': '/',
-}));
-
-
-app.use('/api/admin', (req, res, next) => {
-    if (req.headers['x-user-role'] !== 'Admin') {
-        return res.status(403).send('Forbidden: Only Admins can access this resource.');
-    }
-    next();
-}, createProxy(ADMIN_SERVICE_URL!));
-
+app.use('/api', documentRouter);
+app.use('/api', adminRouter);
 
 
 app.listen(PORT, () => {

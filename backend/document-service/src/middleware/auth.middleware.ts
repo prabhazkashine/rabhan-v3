@@ -48,17 +48,14 @@ export class AuthMiddleware {
 
       const token = authHeader.substring(7);
 
-      // Try to decode the token to determine if it's USER or CONTRACTOR
       let decoded: any = null;
       let userType: 'USER' | 'CONTRACTOR' | null = null;
 
-      // First try with USER JWT secret
       try {
         decoded = jwt.verify(token, this.USER_JWT_SECRET);
         userType = 'USER';
         logger.info('Token verified with USER service secret', { userId: decoded.userId });
       } catch (userJwtError) {
-        // If USER verification fails, try CONTRACTOR JWT secret
         try {
           decoded = jwt.verify(token, this.CONTRACTOR_JWT_SECRET);
           userType = 'CONTRACTOR';
@@ -89,7 +86,6 @@ export class AuthMiddleware {
         return;
       }
 
-      // Extract user info from token payload
       const { userId, email, role, sessionId } = decoded;
 
       if (!userId || !email) {
@@ -108,7 +104,6 @@ export class AuthMiddleware {
         return;
       }
 
-      // Attach user info to request
       req.user = {
         userId,
         userType,
@@ -141,7 +136,6 @@ export class AuthMiddleware {
     }
   };
 
-  // Method to verify token against a specific service secret (useful for debugging)
   public verifyWithSecret(token: string, secret: string): any {
     try {
       return jwt.verify(token, secret);
@@ -150,7 +144,6 @@ export class AuthMiddleware {
     }
   }
 
-  // Method to get token info without verification (for debugging)
   public decodeToken(token: string): any {
     try {
       return jwt.decode(token);

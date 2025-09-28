@@ -8,14 +8,11 @@ import documentRoutes from './routes/document.routes';
 const app = express();
 const port = process.env.PORT || 3004;
 
-// Middleware
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Serve uploaded files statically (with authentication later if needed)
 app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
-// Request logging middleware
 app.use((req, res, next) => {
   logger.info('Incoming request', {
     method: req.method,
@@ -26,7 +23,6 @@ app.use((req, res, next) => {
   next();
 });
 
-// Routes
 app.get('/', (req, res) => {
   res.json({
     success: true,
@@ -39,7 +35,6 @@ app.get('/', (req, res) => {
 app.use('/api/document-categories', documentCategoryRoutes);
 app.use('/api/documents', documentRoutes);
 
-// Error handling middleware
 app.use((error: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   logger.error('Unhandled error', { error: error.message, stack: error.stack });
   res.status(500).json({
@@ -49,7 +44,6 @@ app.use((error: any, req: express.Request, res: express.Response, next: express.
   });
 });
 
-// 404 handler
 app.use((req, res) => {
   res.status(404).json({
     success: false,

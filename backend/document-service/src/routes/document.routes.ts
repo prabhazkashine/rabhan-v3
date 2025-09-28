@@ -30,7 +30,6 @@ router.post(
   documentController.uploadDocument
 );
 
-// GET /api/documents - Get user's documents
 router.get(
   '/',
   authMiddleware.authenticate,

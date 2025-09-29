@@ -1,0 +1,137 @@
+// -- RABHAN Marketplace Service - MVP Database Schema
+// -- SAMA Compliant | Zero-Trust Security | KSA Data Residency
+// -- Database: rabhan_marketplace (PostgreSQL 14+)
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+
+enum StockStatus {
+  IN_STOCK
+  LOW_STOCK
+  OUT_OF_STOCK
+}
+
+enum Status {
+  PENDING
+  ACTIVE
+  INACTIVE
+}
+
+enum Action {
+  INSERT
+  UPDATE
+  DELETE
+}
+
+// =====================================================
+// 1. CATEGORIES TABLE (Simple Solar Categories)
+// =====================================================
+model Category {
+  id             String    @id @default(uuid()) @db.Uuid
+  name           String    @unique @db.VarChar(100)
+  nameAr         String?   @map("name_ar") @db.VarChar(100)
+  slug           String    @unique @db.VarChar(100)
+  description    String?
+  descriptionAr  String?   @map("description_ar")
+  icon           String?   @db.VarChar(50)
+  imageUrl       String?   @map("image_url") @db.VarChar(500)
+  sortOrder      Int?      @map("sort_order") @default(0)
+  isActive       Boolean?  @map("is_active") @default(true)
+  productsCount  Int?      @map("products_count") @default(0)
+  createdAt      DateTime? @map("created_at") @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime? @map("updated_at") @default(now()) @db.Timestamptz(6)
+  createdBy      String?   @map("created_by") @db.Uuid
+  updatedBy      String?   @map("updated_by") @db.Uuid
+  products       Product[]
+
+  @@map("categories")
+  @@index([slug], name: "idx_categories_slug")
+  @@index([isActive], name: "idx_categories_active")
+  @@index([sortOrder], name: "idx_categories_sort")
+}
+
+// =====================================================
+// 2. PRODUCTS TABLE (Core MVP Product Catalog)
+// =====================================================
+model Product {
+  id             String          @id @default(uuid()) @db.Uuid
+  contractorId   String          @map("contractor_id") @db.Uuid
+  categoryId     String          @map("category_id") @db.Uuid
+  name           String          @db.VarChar(255)
+  nameAr         String?         @map("name_ar") @db.VarChar(255)
+  description    String?
+  descriptionAr  String?         @map("description_ar")
+  slug           String          @unique @db.VarChar(255)
+  brand          String          @db.VarChar(100)
+  model          String?         @db.VarChar(100)
+  sku            String?         @unique @db.VarChar(50)
+  specifications Json?           @default("{}")
+  price          Decimal         @db.Decimal(10, 2)
+  currency       String?         @default("SAR") @db.VarChar(3)
+  vatIncluded    Boolean?        @map("vat_included") @default(true)
+  stockQuantity  Int             @map("stock_quantity") @default(0)
+  stockStatus    StockStatus?    @map("stock_status") @default(IN_STOCK)
+  status         Status?         @default(PENDING)
+  createdAt      DateTime?       @map("created_at") @default(now()) @db.Timestamptz(6)
+  updatedAt      DateTime?       @map("updated_at") @updatedAt @db.Timestamptz(6)
+  createdBy      String?         @map("created_by") @db.Uuid
+  updatedBy      String?         @map("updated_by") @db.Uuid
+  category       Category        @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  productImages  ProductImage[]  @relation("ProductToProductImage")
+
+  @@map("products")
+  @@index([categoryId], name: "idx_products_category")
+  @@index([contractorId], name: "idx_products_contractor")
+  @@index([status], name: "idx_products_status")
+  @@index([stockStatus], name: "idx_products_stock")
+  @@index([price], name: "idx_products_price")
+  @@index([createdAt(sort: Desc)], name: "idx_products_created")
+  @@index([slug], name: "idx_products_slug")
+}
+
+// =====================================================
+// 3. PRODUCT_IMAGES TABLE (Simple Image Storage)
+// =====================================================
+model ProductImage {
+  id         String    @id @default(uuid()) @db.Uuid
+  productId  String    @map("product_id") @db.Uuid
+  fileName   String    @map("file_name") @db.VarChar(255)
+  filePath   String    @map("file_path") @db.VarChar(500)
+  fileUrl    String?   @map("file_url") @db.VarChar(500)
+  sortOrder  Int?      @map("sort_order") @default(0)
+  isPrimary  Boolean?  @map("is_primary") @default(false)
+  createdAt  DateTime? @map("created_at") @default(now()) @db.Timestamptz(6)
+  product    Product   @relation("ProductToProductImage", fields: [productId], references: [id], onDelete: Cascade)
+
+  @@map("product_images")
+  @@index([productId], name: "idx_product_images_product")
+  @@index([isPrimary], name: "idx_product_images_primary")
+}
+
+// =====================================================
+// BASIC SAMA AUDIT LOGGING
+// =====================================================
+model AuditLog {
+  id          String   @id @default(uuid()) @db.Uuid
+  tableName   String   @map("table_name") @db.VarChar(50)
+  recordId    String   @map("record_id") @db.Uuid
+  action      Action
+  oldValues   Json?    @map("old_values")
+  newValues   Json?    @map("new_values")
+  changedBy   String?  @map("changed_by") @db.Uuid
+  changedAt   DateTime? @map("changed_at") @default(now()) @db.Timestamptz(6)
+  ipAddress   String?  @map("ip_address") @db.Inet
+  userAgent   String?  @map("user_agent")
+
+  @@map("audit_logs")
+  @@index([tableName], name: "idx_audit_logs_table")
+  @@index([recordId], name: "idx_audit_logs_record")
+  @@index([changedAt(sort: Desc)], name: "idx_audit_logs_date")
+}

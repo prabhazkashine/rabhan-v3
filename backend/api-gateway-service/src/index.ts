@@ -34,7 +34,7 @@ app.use('/api/admin/auth', createProxy(ADMIN_SERVICE_URL!));
 
 
 // Use permission-based product router
-// app.use('/api', productRouter);
+app.use('/api', productRouter);
 
 
 app.use('/api', documentRouter);

@@ -1,5 +1,4 @@
 import { z } from 'zod';
-import { UserType } from '@prisma/client';
 
 const saudiPhoneRegex = /^(05|5)[0-9]{8}$/;
 const indianPhoneRegex = /^(\+91|91|0)?[6-9][0-9]{9}$/;
@@ -74,7 +73,7 @@ export const updateProfileSchema = z.object({
     .regex(nationalIdRegex, 'National ID must be a valid Saudi national ID (10 digits starting with 1 or 2)')
     .optional(),
 
-  userType: z.nativeEnum(UserType)
+  userType: z.enum(['HOMEOWNER', 'CONTRACTOR', 'BUSINESS'])
     .optional(),
 });
 

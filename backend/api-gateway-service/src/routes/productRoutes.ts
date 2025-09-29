@@ -1,59 +1,55 @@
-import { Router } from 'express';
-import { createProxyMiddleware } from 'http-proxy-middleware';
-import { createPermissionMiddleware } from '../middleware/dynamicPermissionMiddleware';
+import { Router, RequestHandler } from 'express';
+import { createProxyMiddleware, RequestHandler as HpmRequestHandler } from 'http-proxy-middleware';
+import { autoPermissionCheck } from '../middleware/permissionMiddleware';
 
 const PRODUCT_SERVICE_URL = process.env.PRODUCT_SERVICE_URL;
 
-const productRouter = Router();
+type PathRewriteMap = Record<string, string>;
 
-const productProxy = createProxyMiddleware({
-  target: PRODUCT_SERVICE_URL!,
-  changeOrigin: true,
-  pathRewrite: {
-    '^/api/products': '/api/products',
-  },
-  logger: console,
-});
-
-const requireAuth = (req: any, res: any, next: any) => {
-  if (!req.headers['x-user-role']) {
-    return res.status(401).json({
-      success: false,
-      message: 'Unauthorized: Please log in.'
-    });
+const createProxy = (target: string, pathRewrites: PathRewriteMap = {}): HpmRequestHandler => {
+  if (!target) {
+    throw new Error('PRODUCT_SERVICE_URL is not defined in the environment.');
   }
-  next();
+  
+  return createProxyMiddleware({
+    target,
+    changeOrigin: true,
+    pathRewrite: pathRewrites,
+    logger: console, 
+  });
+};
+
+const superAdminAuth: RequestHandler = (req, res, next) => {
+    const userRole = req.headers['x-user-role'];
+
+    if (userRole !== 'super_admin') {
+        return res.status(403).send('Forbidden: Only Super Admin can access this resource.');
+    }
+    next();
 };
 
 
-productRouter.use('/document-categories',
-    requireAuth,
-    (req, res, next) => {
-        const method = req.method.toUpperCase();
-        let action: string;
+const adminAuth: RequestHandler = (req, res, next) => {
+    const userRole = req.headers['x-user-role'];
 
-        switch (method) {
-            case 'GET':
-                action = 'READ';
-                break;
-            case 'POST':
-                action = 'create';
-                break;
-            case 'PUT':
-            case 'PATCH':
-                action = 'update';
-                break;
-            case 'DELETE':
-                action = 'delete';
-                break;
-            default:
-                return res.status(405).json({ error: 'Method not allowed' });
-        }
+    if (userRole !== 'admin') {
+        return res.status(403).send('Forbidden: Only Super Admin can access this resource.');
+    }
+    next();
+};
 
-        const permissionMiddleware = createPermissionMiddleware('PRODUCTS', action.toUpperCase());
-        permissionMiddleware(req, res, next);
-    },
-    productProxy
+
+const productRouter = Router();
+
+const productCategoryProxy = createProxy(PRODUCT_SERVICE_URL!, {
+    '^/': '/api/product-categories/',
+});
+
+
+productRouter.use('/product-categories',
+    superAdminAuth,
+    autoPermissionCheck("ADMINS"),
+    productCategoryProxy
 );
 
 export default productRouter;

@@ -1,4 +1,4 @@
-import { PrismaClient, UserRole, UserStatus, UserType, PreferredLanguage, ProfileVerificationStatus } from '@prisma/client';
+import { PrismaClient, UserRole, UserStatus, UserType, PreferredLanguage, ProfileVerificationStatus } from '../generated/prisma';
 import { v4 as uuidv4 } from 'uuid';
 import { RegisterRequest, LoginRequest } from '../validation/schemas';
 import { PasswordUtils } from '../utils/password';

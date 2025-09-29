@@ -10,17 +10,13 @@ import { AuthenticatedRequest, ApiResponse, Category } from '../types/common';
 import { ValidationError } from '../utils/errors';
 import logger from '../utils/logger';
 
-// Helper function to validate and extract user ID
 function validateUserId(req: Request): string {
   const userId = req.headers['x-user-id'] as string;
-
-  console.log(req.headers, 'kkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk')
 
   if (!userId || userId === 'undefined' || userId === 'null') {
     throw new ValidationError('User authentication required - valid x-user-id header missing');
   }
 
-  // Validate UUID format
   const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
   if (!uuidRegex.test(userId)) {
     throw new ValidationError('Invalid user ID format - must be a valid UUID');
@@ -304,14 +300,11 @@ export class CategoryController {
     const startTime = process.hrtime.bigint();
 
     try {
-      // Validate query parameters
       const queryOptions = CategoryQuerySchema.parse({
         ...req.query,
-        // Force active categories only for public endpoint
         isActive: 'true'
       });
 
-      // Get categories
       const result = await categoryService.getCategories(queryOptions);
 
       const response: ApiResponse<Category[]> = {

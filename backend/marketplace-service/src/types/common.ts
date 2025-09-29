@@ -71,6 +71,45 @@ export interface Category {
   updatedBy?: string;
 }
 
+// Product related types
+export interface Product {
+  id: string;
+  contractorId: string;
+  categoryId: string;
+  name: string;
+  nameAr?: string;
+  description?: string;
+  descriptionAr?: string;
+  slug: string;
+  brand: string;
+  model?: string;
+  sku?: string;
+  specifications?: Record<string, any>;
+  price: number;
+  currency: string;
+  vatIncluded: boolean;
+  stockQuantity: number;
+  stockStatus: 'IN_STOCK' | 'LOW_STOCK' | 'OUT_OF_STOCK';
+  status: 'PENDING' | 'ACTIVE' | 'INACTIVE';
+  createdAt: Date;
+  updatedAt: Date;
+  createdBy?: string;
+  updatedBy?: string;
+  productImages?: ProductImage[];
+  category?: Category;
+}
+
+export interface ProductImage {
+  id: string;
+  productId: string;
+  fileName: string;
+  filePath: string;
+  fileUrl?: string;
+  sortOrder: number;
+  isPrimary: boolean;
+  createdAt: Date;
+}
+
 // Database query options
 export interface QueryOptions {
   page?: number;

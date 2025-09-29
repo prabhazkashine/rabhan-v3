@@ -1,10 +1,9 @@
 import jwt from 'jsonwebtoken';
-import { UserRole } from '@prisma/client';
 
 export interface JWTPayload {
   userId: string;
   email: string;
-  role: UserRole;
+  role: string;
   sessionId: string;
 }
 
@@ -20,7 +19,7 @@ class JWTUtils {
   private static readonly ACCESS_TOKEN_EXPIRES_IN = '15m';
   private static readonly REFRESH_TOKEN_EXPIRES_IN = '7d';
 
-  static generateTokenPair(userId: string, email: string, role: UserRole, sessionId: string): AuthTokens {
+  static generateTokenPair(userId: string, email: string, role: string, sessionId: string): AuthTokens {
     const payload: JWTPayload = {
       userId,
       email,

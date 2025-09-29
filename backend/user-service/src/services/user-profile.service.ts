@@ -1,4 +1,4 @@
-import { PrismaClient, UserProfile, ProfileVerificationStatus } from '@prisma/client';
+import { PrismaClient, UserProfile, ProfileVerificationStatus } from '../generated/prisma';
 import { UpdateUserProfileRequest } from '../validation/user-profile.schemas';
 import { logger } from '../utils/logger';
 

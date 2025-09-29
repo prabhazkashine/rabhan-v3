@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { categoryRoutes } from './category.routes';
+import { productRoutes } from './product.routes';
 
 const router = Router();
 
@@ -16,6 +17,7 @@ router.get('/health', (req, res) => {
 });
 
 router.use(`${API_VERSION}/product-categories`, categoryRoutes);
+router.use(`${API_VERSION}/products`, productRoutes);
 
 router.get('/api-info', (req, res) => {
   res.json({
@@ -26,16 +28,35 @@ router.get('/api-info', (req, res) => {
     endpoints: {
       categories: {
         public: [
-          'GET /api/v1/categories/public - List active categories (public)',
-          'GET /api/v1/categories/public/slug/:slug - Get category by slug (public)'
+          'GET /api/product-categories/public - List active categories (public)',
+          'GET /api/product-categories/public/slug/:slug - Get category by slug (public)'
         ],
         authenticated: [
-          'GET /api/v1/categories - List categories (paginated)',
-          'GET /api/v1/categories/:id - Get category by ID',
-          'GET /api/v1/categories/slug/:slug - Get category by slug',
-          'POST /api/v1/categories - Create category (admin/contractor)',
-          'PUT /api/v1/categories/:id - Update category (admin/contractor)',
-          'DELETE /api/v1/categories/:id - Delete category (admin only)'
+          'GET /api/product-categories - List categories (paginated)',
+          'GET /api/product-categories/:id - Get category by ID',
+          'GET /api/product-categories/slug/:slug - Get category by slug',
+          'POST /api/product-categories - Create category (admin/contractor)',
+          'PUT /api/product-categories/:id - Update category (admin/contractor)',
+          'DELETE /api/product-categories/:id - Delete category (admin only)'
+        ]
+      },
+      products: {
+        public: [
+          'GET /api/products/public - List active products (public)',
+          'GET /api/products/public/slug/:slug - Get product by slug (public)'
+        ],
+        authenticated: [
+          'GET /api/products - List products (paginated)',
+          'GET /api/products/:id - Get product by ID',
+          'GET /api/products/slug/:slug - Get product by slug',
+          'POST /api/products - Create product (contractor/admin)',
+          'PUT /api/products/:id - Update product (contractor/admin)',
+          'DELETE /api/products/:id - Delete product (contractor/admin)'
+        ],
+        admin: [
+          'GET /api/products/admin/pending - List pending products (admin only)',
+          'POST /api/products/:id/approve - Approve/reject product (admin only)',
+          'POST /api/products/admin/bulk-action - Bulk operations (admin only)'
         ]
       },
       system: [

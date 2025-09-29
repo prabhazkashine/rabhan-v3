@@ -1,12 +1,46 @@
 import { z } from 'zod';
-import {
-  PropertyType,
-  PropertyOwnership,
-  ElectricityConsumptionRange,
-  PreferredLanguage,
-  EmploymentStatus,
-  ProfileVerificationStatus
-} from '@prisma/client';
+
+// Define enum values as they appear in Prisma schema
+const PropertyType = {
+  villa: 'villa',
+  apartment: 'apartment',
+  duplex: 'duplex',
+  townhouse: 'townhouse',
+  commercial: 'commercial',
+  industrial: 'industrial',
+  other: 'other'
+} as const;
+
+const PropertyOwnership = {
+  owned: 'owned',
+  rented: 'rented',
+  leased: 'leased',
+  family_owned: 'family_owned'
+} as const;
+
+const ElectricityConsumptionRange = {
+  E0_200: 'E0_200',
+  E200_400: 'E200_400',
+  E400_600: 'E400_600',
+  E600_800: 'E600_800',
+  E800_1000: 'E800_1000',
+  E1000_1200: 'E1000_1200',
+  E1200_1500: 'E1200_1500',
+  E1500_PLUS: 'E1500_PLUS'
+} as const;
+
+const PreferredLanguage = {
+  en: 'en',
+  ar: 'ar'
+} as const;
+
+const EmploymentStatus = {
+  government: 'government',
+  private: 'private',
+  self_employed: 'self_employed',
+  student: 'student',
+  retired: 'retired'
+} as const;
 
 export const updateUserProfileSchema = z.object({
   // Personal Information
@@ -53,9 +87,9 @@ export const updateUserProfileSchema = z.object({
     .optional(),
 
   // Property & Energy Information
-  propertyType: z.nativeEnum(PropertyType).optional(),
+  propertyType: z.enum(Object.values(PropertyType) as [string, ...string[]]).optional(),
 
-  propertyOwnership: z.nativeEnum(PropertyOwnership).optional(),
+  propertyOwnership: z.enum(Object.values(PropertyOwnership) as [string, ...string[]]).optional(),
 
   roofSize: z.number()
     .positive('Roof size must be a positive number')
@@ -75,7 +109,7 @@ export const updateUserProfileSchema = z.object({
     .multipleOf(0.00000001, 'Longitude precision too high')
     .optional(),
 
-  electricityConsumption: z.nativeEnum(ElectricityConsumptionRange).optional(),
+  electricityConsumption:  z.string(),
 
   electricityMeterNumber: z.string()
     .min(5, 'Electricity meter number must be at least 5 characters')
@@ -84,7 +118,7 @@ export const updateUserProfileSchema = z.object({
     .optional(),
 
   // Employment Information (optional for BNPL eligibility)
-  employmentStatus: z.nativeEnum(EmploymentStatus).optional().nullable(),
+  employmentStatus: z.enum(Object.values(EmploymentStatus) as [string, ...string[]]).optional().nullable(),
 
   employerName: z.string()
     .min(2, 'Employer name must be at least 2 characters')
@@ -126,7 +160,7 @@ export const updateUserProfileSchema = z.object({
     .nullable(),
 
   // Preferences
-  preferredLanguage: z.nativeEnum(PreferredLanguage).optional(),
+  preferredLanguage: z.enum(Object.values(PreferredLanguage) as [string, ...string[]]).optional(),
 
   emailNotifications: z.boolean().optional(),
 

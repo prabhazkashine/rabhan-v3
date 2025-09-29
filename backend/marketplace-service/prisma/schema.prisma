@@ -9,6 +9,7 @@ datasource db {
 
 generator client {
   provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
 }
 
 
@@ -63,6 +64,7 @@ model Category {
 model Product {
   id             String          @id @default(uuid()) @db.Uuid
   contractorId   String          @map("contractor_id") @db.Uuid
+  contractorName String?         @db.VarChar(255)
   categoryId     String          @map("category_id") @db.Uuid
   name           String          @db.VarChar(255)
   nameAr         String?         @map("name_ar") @db.VarChar(255)
@@ -72,6 +74,7 @@ model Product {
   brand          String          @db.VarChar(100)
   model          String?         @db.VarChar(100)
   sku            String?         @unique @db.VarChar(50)
+  reason         String?
   specifications Json?           @default("{}")
   price          Decimal         @db.Decimal(10, 2)
   currency       String?         @default("SAR") @db.VarChar(3)

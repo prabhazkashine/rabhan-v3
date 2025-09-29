@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '../generated/prisma';
 import logger from './logger';
 import { DatabaseError, DatabaseConnectionError } from './errors';
 

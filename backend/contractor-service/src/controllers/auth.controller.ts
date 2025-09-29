@@ -23,13 +23,11 @@ export class AuthController {
     try {
       const data: ContractorRegisterRequest = req.body;
 
-      // Set role and userType for contractor
       data.role = 'CONTRACTOR';
       if (!data.userType) {
         data.userType = 'BUSINESS';
       }
 
-      // Extract company info for logging
       const companyName = data.companyName;
 
       SAMALogger.logAuthEvent('CONTRACTOR_REGISTRATION_ATTEMPT', undefined, {
@@ -39,7 +37,6 @@ export class AuthController {
         ip: req.ip
       });
 
-      // Register contractor
       const tokens = await this.authService.register(data);
 
       SAMALogger.logAuthEvent('CONTRACTOR_REGISTRATION_SUCCESS', tokens.user?.id, {

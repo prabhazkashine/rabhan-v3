@@ -47,6 +47,8 @@ export class DocumentController {
         mimeType: req.file.mimetype,
       });
 
+      console.log(categoryId, user.userType, 'uuuuuuuuuuuuuuuuuuu')
+
       // Validate that the category is appropriate for the user type
       const isValidCategory = await this.documentService.validateCategoryForUser(
         categoryId,

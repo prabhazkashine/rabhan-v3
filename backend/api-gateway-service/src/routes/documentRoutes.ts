@@ -41,14 +41,12 @@ const categoryProxy = createProxy(DOCUMENT_SERVICE_URL!, {
 
 documentRouter.use('/documents',
     userAuth,
-    autoPermissionCheck("DOCUMENTS"),
     documentProxy
 );
 
 
 documentRouter.use('/document-categories',
     userAuth,
-    autoPermissionCheck("DOCUMENTS"),
     categoryProxy
 );
 

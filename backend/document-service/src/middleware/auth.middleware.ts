@@ -53,7 +53,7 @@ export class AuthMiddleware {
 
       try {
         decoded = jwt.verify(token, this.USER_JWT_SECRET);
-        userType = 'USER';
+        userType = 'CONTRACTOR';
         logger.info('Token verified with USER service secret', { userId: decoded.userId });
       } catch (userJwtError) {
         try {

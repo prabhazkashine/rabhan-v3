@@ -98,7 +98,7 @@ export class DocumentCategoryService {
     const defaultCategories = [
       {
         name: "cr_certificate",
-        description: "C.R Certificate",
+        description: "C.R Commercial Registration Certificate",
         allowed_formats: ["pdf", "jpg", "jpeg", "png"] as ("pdf" | "jpg" | "jpeg" | "png")[],
         max_file_size_mb: 10,
         required_for_kyc: true,
@@ -108,6 +108,33 @@ export class DocumentCategoryService {
       {
         name: "gosi_certificate",
         description: "GOSI Certificate",
+        allowed_formats: ["pdf", "jpg", "jpeg", "png"] as ("pdf" | "jpg" | "jpeg" | "png")[],
+        max_file_size_mb: 10,
+        required_for_kyc: true,
+        user_type: "CONTRACTOR" as const,
+        validation_rules: {}
+      },
+      {
+        name: "mhrsd_certificate",
+        description: "Ministry of Human Resources and Social Development - Nationalization Details Certificate",
+        allowed_formats: ["pdf", "jpg", "jpeg", "png"] as ("pdf" | "jpg" | "jpeg" | "png")[],
+        max_file_size_mb: 10,
+        required_for_kyc: true,
+        user_type: "CONTRACTOR" as const,
+        validation_rules: {}
+      },
+      {
+        name: "monsha_certificate",
+        description: "Monsha'at (Jadeer) Certificate",
+        allowed_formats: ["pdf", "jpg", "jpeg", "png"] as ("pdf" | "jpg" | "jpeg" | "png")[],
+        max_file_size_mb: 10,
+        required_for_kyc: true,
+        user_type: "CONTRACTOR" as const,
+        validation_rules: {}
+      },
+      {
+        name: "sec_by_monsha_certificate",
+        description: "Size of Enterprise Certificate by Monsha'at Certificate",
         allowed_formats: ["pdf", "jpg", "jpeg", "png"] as ("pdf" | "jpg" | "jpeg" | "png")[],
         max_file_size_mb: 10,
         required_for_kyc: true,
@@ -144,6 +171,105 @@ export class DocumentCategoryService {
       {
         name: "zakat_certificate",
         description: "ZAKAT Certificate",
+        allowed_formats: ["pdf", "jpg", "jpeg", "png"] as ("pdf" | "jpg" | "jpeg" | "png")[],
+        max_file_size_mb: 10,
+        required_for_kyc: true,
+        user_type: "CONTRACTOR" as const,
+        validation_rules: {}
+      },
+      {
+        name: "coc_certificate",
+        description: "Chamber of Commerce & Industry Membership Details Certificate",
+        allowed_formats: ["pdf", "jpg", "jpeg", "png"] as ("pdf" | "jpg" | "jpeg" | "png")[],
+        max_file_size_mb: 10,
+        required_for_kyc: true,
+        user_type: "CONTRACTOR" as const,
+        validation_rules: {}
+      },
+      {
+        name: "agpl_certificate",
+        description: "Additional Government Permits and Licenses Certificate",
+        allowed_formats: ["pdf", "jpg", "jpeg", "png"] as ("pdf" | "jpg" | "jpeg" | "png")[],
+        max_file_size_mb: 10,
+        required_for_kyc: true,
+        user_type: "CONTRACTOR" as const,
+        validation_rules: {}
+      },
+      {
+        name: "civil_defense_license",
+        description: "Civil Defense License or an equivalent Government Permit Expiry Date",
+        allowed_formats: ["pdf", "jpg", "jpeg", "png"] as ("pdf" | "jpg" | "jpeg" | "png")[],
+        max_file_size_mb: 10,
+        required_for_kyc: true,
+        user_type: "CONTRACTOR" as const,
+        validation_rules: {}
+      },
+      {
+        name: "municipalities_housing_license",
+        description: "Ministry of Municipalities and Housing License",
+        allowed_formats: ["pdf", "jpg", "jpeg", "png"] as ("pdf" | "jpg" | "jpeg" | "png")[],
+        max_file_size_mb: 10,
+        required_for_kyc: true,
+        user_type: "CONTRACTOR" as const,
+        validation_rules: {}
+      },
+      {
+        name: "financial_requirement_letter",
+        description: "A letter from the bank with which the company is dealing, stating the type of service that the bank normally provides to your company and relationship status",
+        allowed_formats: ["pdf", "jpg", "jpeg", "png"] as ("pdf" | "jpg" | "jpeg" | "png")[],
+        max_file_size_mb: 10,
+        required_for_kyc: true,
+        user_type: "CONTRACTOR" as const,
+        validation_rules: {}
+      },
+      {
+        name: "authorized_signatory_letter",
+        description: "Authorized Signatory Letter (must be authenticated by the Chamber of Commerce)",
+        allowed_formats: ["pdf", "jpg", "jpeg", "png"] as ("pdf" | "jpg" | "jpeg" | "png")[],
+        max_file_size_mb: 10,
+        required_for_kyc: true,
+        user_type: "CONTRACTOR" as const,
+        validation_rules: {}
+      },
+      {
+        name: "authorized_signatory_nid_front",
+        description: "Authorized Signatory National ID (Front Face)",
+        allowed_formats: ["pdf", "jpg", "jpeg", "png"] as ("pdf" | "jpg" | "jpeg" | "png")[],
+        max_file_size_mb: 10,
+        required_for_kyc: true,
+        user_type: "CONTRACTOR" as const,
+        validation_rules: {}
+      },
+      {
+        name: "authorized_signatory_nid_back",
+        description: "Authorized Signatory National ID (Back Face)",
+        allowed_formats: ["pdf", "jpg", "jpeg", "png"] as ("pdf" | "jpg" | "jpeg" | "png")[],
+        max_file_size_mb: 10,
+        required_for_kyc: true,
+        user_type: "CONTRACTOR" as const,
+        validation_rules: {}
+      },
+      {
+        name: "authorized_contact_person_letter",
+        description: "Authorized Contact Person Letter (must be authenticated by the Chamber of Commerce)",
+        allowed_formats: ["pdf", "jpg", "jpeg", "png"] as ("pdf" | "jpg" | "jpeg" | "png")[],
+        max_file_size_mb: 10,
+        required_for_kyc: true,
+        user_type: "CONTRACTOR" as const,
+        validation_rules: {}
+      },
+      {
+        name: "authorized_contact_person_nid_front",
+        description: "Authorized Contact Person National ID (Front Face)",
+        allowed_formats: ["pdf", "jpg", "jpeg", "png"] as ("pdf" | "jpg" | "jpeg" | "png")[],
+        max_file_size_mb: 10,
+        required_for_kyc: true,
+        user_type: "CONTRACTOR" as const,
+        validation_rules: {}
+      },
+      {
+        name: "authorized_contact_person_nid_back",
+        description: "Authorized Contact Person National ID (Back Face)",
         allowed_formats: ["pdf", "jpg", "jpeg", "png"] as ("pdf" | "jpg" | "jpeg" | "png")[],
         max_file_size_mb: 10,
         required_for_kyc: true,

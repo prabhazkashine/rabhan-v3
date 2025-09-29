@@ -23,6 +23,7 @@ enum Status {
   PENDING
   ACTIVE
   INACTIVE
+  DELETED
 }
 
 enum Action {
@@ -76,6 +77,7 @@ model Product {
   sku            String?         @unique @db.VarChar(50)
   reason         String?
   specifications Json?           @default("{}")
+  categorySpecs  Json?           @map("category_specs") @default("{}")
   price          Decimal         @db.Decimal(10, 2)
   currency       String?         @default("SAR") @db.VarChar(3)
   vatIncluded    Boolean?        @map("vat_included") @default(true)

@@ -207,14 +207,11 @@ export class CategoryController {
     const startTime = process.hrtime.bigint();
 
     try {
-      // Validate params and body
       const { id } = CategoryParamsSchema.parse(req.params);
       const validatedData = CategoryUpdateSchema.parse(req.body);
 
-      // Get user context
       const userId = validateUserId(req);
 
-      // Update category
       const category = await categoryService.updateCategory(id, validatedData, userId);
 
       const response: ApiResponse<Category> = {
@@ -228,7 +225,6 @@ export class CategoryController {
         }
       };
 
-      // Performance monitoring
       const duration = Number(process.hrtime.bigint() - startTime) / 1000000;
       logger.auditPerformance('CATEGORY_UPDATE_ENDPOINT', duration, {
         categoryId: id,
@@ -254,13 +250,10 @@ export class CategoryController {
     const startTime = process.hrtime.bigint();
 
     try {
-      // Validate params
       const { id } = CategoryParamsSchema.parse(req.params);
 
-      // Get user context
       const userId = validateUserId(req);
 
-      // Delete category
       await categoryService.deleteCategory(id, userId);
 
       const response: ApiResponse<null> = {
@@ -274,7 +267,6 @@ export class CategoryController {
         }
       };
 
-      // Performance monitoring
       const duration = Number(process.hrtime.bigint() - startTime) / 1000000;
       logger.auditPerformance('CATEGORY_DELETE_ENDPOINT', duration, {
         categoryId: id,

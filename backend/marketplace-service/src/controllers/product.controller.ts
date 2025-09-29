@@ -11,6 +11,7 @@ import { AuthenticatedRequest, ApiResponse, Product } from '../types/common';
 import { ValidationError, ErrorFactory } from '../utils/errors';
 import logger from '../utils/logger';
 import { prisma } from '../utils/database';
+import { generateFileUrl } from '../utils/upload';
 
 function validateUserId(req: Request): string {
   const userId = req.headers['x-user-id'] as string;
@@ -41,10 +42,25 @@ export class ProductController {
       });
 
       const validatedData = ProductCreateSchema.parse(req.body);
-
       const userId = validateUserId(req);
 
-      const product = await productService.createProduct(validatedData, userId);
+      // Handle uploaded images
+      const uploadedFiles = req.files as Express.Multer.File[];
+      const imageData = uploadedFiles ? uploadedFiles.map((file, index) => ({
+        fileName: file.filename,
+        filePath: file.path,
+        fileUrl: generateFileUrl(req, file.filename),
+        sortOrder: index,
+        isPrimary: index === 0 // First image is primary
+      })) : [];
+
+      // Add images to validated data
+      const productDataWithImages = {
+        ...validatedData,
+        images: imageData
+      };
+
+      const product = await productService.createProduct(productDataWithImages, userId);
 
       const response: ApiResponse<Product> = {
         success: true,
@@ -81,11 +97,11 @@ export class ProductController {
     const startTime = process.hrtime.bigint();
 
     try {
-      // Validate params
       const { id } = ProductParamsSchema.parse(req.params);
 
-      // Get product
-      const product = await productService.getProductById(id, (req as AuthenticatedRequest).user?.id);
+      const userContractorId = validateUserId(req);
+
+      const product = await productService.getProductById(id, userContractorId);
 
       const response: ApiResponse<Product> = {
         success: true,
@@ -175,7 +191,6 @@ export class ProductController {
     try {
       const { id } = ProductParamsSchema.parse(req.params);
       const validatedData = ProductUpdateSchema.parse(req.body);
-
       const userId = validateUserId(req);
 
       const existingProduct = await productService.getProductById(id);
@@ -184,7 +199,24 @@ export class ProductController {
         throw new ValidationError('You can only update your own products');
       }
 
-      const product = await productService.updateProduct(id, validatedData, userId);
+      // Handle uploaded images
+      const uploadedFiles = req.files as Express.Multer.File[];
+      const newImageData = uploadedFiles ? uploadedFiles.map((file, index) => ({
+        fileName: file.filename,
+        filePath: file.path,
+        fileUrl: generateFileUrl(req, file.filename),
+        sortOrder: index,
+        isPrimary: index === 0,
+        action: 'add' as const
+      })) : [];
+
+      // Add new images to validated data
+      const productDataWithImages = {
+        ...validatedData,
+        images: newImageData.length > 0 ? newImageData : undefined
+      };
+
+      const product = await productService.updateProduct(id, productDataWithImages, userId);
 
       const response: ApiResponse<Product> = {
         success: true,
@@ -209,6 +241,48 @@ export class ProductController {
     } catch (error) {
       const duration = Number(process.hrtime.bigint() - startTime) / 1000000;
       logger.error('Product update failed in controller', error, {
+        productId: req.params.id,
+        userId: (req as AuthenticatedRequest).user?.id,
+        requestId: (req as AuthenticatedRequest).context?.requestId || 'unknown',
+        performanceMetrics: { duration }
+      });
+      next(error);
+    }
+  }
+
+  async hardDeleteProduct(req: Request, res: Response, next: NextFunction): Promise<void> {
+    const startTime = process.hrtime.bigint();
+
+    try {
+      const { id } = ProductParamsSchema.parse(req.params);
+
+      const userId = validateUserId(req);
+
+      await productService.hardDeleteProduct(id, userId);
+
+      const response: ApiResponse<null> = {
+        success: true,
+        data: null,
+        message: 'Product permanently deleted successfully',
+        meta: {
+          timestamp: new Date().toISOString(),
+          requestId: (req as AuthenticatedRequest).context?.requestId || 'unknown',
+          version: '1.0.0'
+        }
+      };
+
+      const duration = Number(process.hrtime.bigint() - startTime) / 1000000;
+      logger.auditPerformance('PRODUCT_HARD_DELETE_ENDPOINT', duration, {
+        productId: id,
+        userId,
+        success: true
+      });
+
+      res.json(response);
+
+    } catch (error) {
+      const duration = Number(process.hrtime.bigint() - startTime) / 1000000;
+      logger.error('Product hard deletion failed in controller', error, {
         productId: req.params.id,
         userId: (req as AuthenticatedRequest).user?.id,
         requestId: (req as AuthenticatedRequest).context?.requestId || 'unknown',
@@ -368,75 +442,13 @@ export class ProductController {
         throw new ValidationError('Invalid slug parameter');
       }
 
-      const product = await prisma.product.findUnique({
-        where: { slug },
-        include: {
-          category: true,
-          productImages: {
-            orderBy: { sortOrder: 'asc' }
-          }
-        }
-      });
+      const userContractorId = validateUserId(req);
 
-      if (!product) {
-        throw ErrorFactory.notFound('Product', slug);
-      }
-
-      const transformedProduct: Product = {
-        id: product.id,
-        contractorId: product.contractorId,
-        categoryId: product.categoryId,
-        name: product.name,
-        nameAr: product.nameAr ?? undefined,
-        description: product.description ?? undefined,
-        descriptionAr: product.descriptionAr ?? undefined,
-        slug: product.slug,
-        brand: product.brand,
-        model: product.model ?? undefined,
-        sku: product.sku ?? undefined,
-        specifications: product.specifications as Record<string, any>,
-        price: Number(product.price),
-        currency: product.currency || 'SAR',
-        vatIncluded: product.vatIncluded || true,
-        stockQuantity: product.stockQuantity,
-        stockStatus: product.stockStatus as 'IN_STOCK' | 'LOW_STOCK' | 'OUT_OF_STOCK',
-        status: product.status as 'PENDING' | 'ACTIVE' | 'INACTIVE',
-        createdAt: product.createdAt || new Date(),
-        updatedAt: product.updatedAt || new Date(),
-        createdBy: product.createdBy ?? undefined,
-        updatedBy: product.updatedBy ?? undefined,
-        productImages: product.productImages.map(img => ({
-          id: img.id,
-          productId: img.productId,
-          fileName: img.fileName,
-          filePath: img.filePath,
-          fileUrl: img.fileUrl ?? undefined,
-          sortOrder: img.sortOrder ?? 0,
-          isPrimary: img.isPrimary ?? false,
-          createdAt: img.createdAt ?? new Date()
-        })),
-        category: product.category ? {
-          id: product.category.id,
-          name: product.category.name,
-          nameAr: product.category.nameAr ?? undefined,
-          slug: product.category.slug,
-          description: product.category.description ?? undefined,
-          descriptionAr: product.category.descriptionAr ?? undefined,
-          icon: product.category.icon ?? undefined,
-          imageUrl: product.category.imageUrl ?? undefined,
-          sortOrder: product.category.sortOrder ?? 0,
-          isActive: product.category.isActive ?? true,
-          productsCount: product.category.productsCount ?? 0,
-          createdAt: product.category.createdAt ?? new Date(),
-          updatedAt: product.category.updatedAt ?? new Date(),
-          createdBy: product.category.createdBy ?? undefined,
-          updatedBy: product.category.updatedBy ?? undefined
-        } : undefined
-      };
+      const product = await productService.getProductBySlug(slug, userContractorId);
 
       const response: ApiResponse<Product> = {
         success: true,
-        data: transformedProduct,
+        data: product,
         message: 'Product retrieved successfully',
         meta: {
           timestamp: new Date().toISOString(),
@@ -512,6 +524,88 @@ export class ProductController {
       const duration = Number(process.hrtime.bigint() - startTime) / 1000000;
       logger.error('Get pending products failed in controller', error, {
         query: req.query,
+        userId: (req as AuthenticatedRequest).user?.id,
+        requestId: (req as AuthenticatedRequest).context?.requestId || 'unknown',
+        performanceMetrics: { duration }
+      });
+      next(error);
+    }
+  }
+
+  async getProductStats(req: Request, res: Response, next: NextFunction): Promise<void> {
+    const startTime = process.hrtime.bigint();
+
+    try {
+      const userId = validateUserId(req);
+      const userRole = req.headers['x-user-role'] as string;
+
+      const stats = await productService.getProductStats(userId, userRole);
+
+      const response: ApiResponse<typeof stats> = {
+        success: true,
+        data: stats,
+        message: 'Product statistics retrieved successfully',
+        meta: {
+          timestamp: new Date().toISOString(),
+          requestId: (req as AuthenticatedRequest).context?.requestId || 'unknown',
+          version: '1.0.0'
+        }
+      };
+
+      const duration = Number(process.hrtime.bigint() - startTime) / 1000000;
+      logger.auditPerformance('PRODUCT_STATS_ENDPOINT', duration, {
+        userId,
+        userRole,
+        success: true
+      });
+
+      res.json(response);
+
+    } catch (error) {
+      const duration = Number(process.hrtime.bigint() - startTime) / 1000000;
+      logger.error('Get product stats failed in controller', error, {
+        userId: (req as AuthenticatedRequest).user?.id,
+        requestId: (req as AuthenticatedRequest).context?.requestId || 'unknown',
+        performanceMetrics: { duration }
+      });
+      next(error);
+    }
+  }
+
+  async getPendingProductStats(req: Request, res: Response, next: NextFunction): Promise<void> {
+    const startTime = process.hrtime.bigint();
+
+    try {
+      const userId = validateUserId(req);
+      const userRole = req.headers['x-user-role'] as string;
+
+      // Get pending product statistics
+      const pendingStats = await productService.getPendingProductStats(userId, userRole);
+
+      const response: ApiResponse<typeof pendingStats> = {
+        success: true,
+        data: pendingStats,
+        message: 'Pending product statistics retrieved successfully',
+        meta: {
+          timestamp: new Date().toISOString(),
+          requestId: (req as AuthenticatedRequest).context?.requestId || 'unknown',
+          version: '1.0.0'
+        }
+      };
+
+      const duration = Number(process.hrtime.bigint() - startTime) / 1000000;
+      logger.auditPerformance('PENDING_PRODUCT_STATS_ENDPOINT', duration, {
+        userId,
+        userRole,
+        totalPending: pendingStats.totalPending,
+        success: true
+      });
+
+      res.json(response);
+
+    } catch (error) {
+      const duration = Number(process.hrtime.bigint() - startTime) / 1000000;
+      logger.error('Get pending product stats failed in controller', error, {
         userId: (req as AuthenticatedRequest).user?.id,
         requestId: (req as AuthenticatedRequest).context?.requestId || 'unknown',
         performanceMetrics: { duration }

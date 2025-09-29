@@ -53,6 +53,7 @@ export class ProductService {
             model: productData.model,
             sku: productData.sku,
             specifications: productData.specifications,
+            categorySpecs: productData.categorySpecs,
             price: productData.price,
             currency: productData.currency,
             vatIncluded: productData.vatIncluded,
@@ -127,12 +128,123 @@ export class ProductService {
     }
   }
 
-  async getProductById(id: string, userId?: string): Promise<Product> {
+  async getProductBySlug(slug: string, userId?: string, includeDeleted = false): Promise<Product> {
     const startTime = process.hrtime.bigint();
 
     try {
-      const product = await prisma.product.findUnique({
-        where: { id },
+      const whereCondition: Prisma.ProductWhereInput = { slug };
+      if (!includeDeleted) {
+        whereCondition.status = { not: 'DELETED' };
+      }
+
+      const product = await prisma.product.findFirst({
+        where: whereCondition,
+        include: {
+          category: true,
+          productImages: {
+            orderBy: { sortOrder: 'asc' }
+          }
+        }
+      });
+
+      if (!product) {
+        throw ErrorFactory.notFound('Product', slug);
+      }
+
+      const result: Product = {
+        id: product.id,
+        contractorId: product.contractorId,
+        categoryId: product.categoryId,
+        name: product.name,
+        nameAr: product.nameAr,
+        description: product.description,
+        descriptionAr: product.descriptionAr,
+        slug: product.slug,
+        brand: product.brand,
+        model: product.model,
+        sku: product.sku,
+        specifications: product.specifications as Record<string, any>,
+        categorySpecs: product.categorySpecs as any,
+        price: Number(product.price),
+        currency: product.currency || 'SAR',
+        vatIncluded: product.vatIncluded || true,
+        stockQuantity: product.stockQuantity,
+        stockStatus: product.stockStatus as 'IN_STOCK' | 'LOW_STOCK' | 'OUT_OF_STOCK',
+        status: product.status as 'PENDING' | 'ACTIVE' | 'INACTIVE',
+        createdAt: product.createdAt || new Date(),
+        updatedAt: product.updatedAt || new Date(),
+        createdBy: product.createdBy,
+        updatedBy: product.updatedBy,
+        productImages: product.productImages.map(img => ({
+          id: img.id,
+          productId: img.productId,
+          fileName: img.fileName,
+          filePath: img.filePath,
+          fileUrl: img.fileUrl,
+          sortOrder: img.sortOrder || 0,
+          isPrimary: img.isPrimary || false,
+          createdAt: img.createdAt || new Date()
+        })),
+        category: product.category ? {
+          id: product.category.id,
+          name: product.category.name,
+          nameAr: product.category.nameAr,
+          slug: product.category.slug,
+          description: product.category.description,
+          descriptionAr: product.category.descriptionAr,
+          icon: product.category.icon,
+          imageUrl: product.category.imageUrl,
+          sortOrder: product.category.sortOrder || 0,
+          isActive: product.category.isActive || true,
+          productsCount: product.category.productsCount || 0,
+          createdAt: product.category.createdAt || new Date(),
+          updatedAt: product.category.updatedAt || new Date(),
+          createdBy: product.category.createdBy,
+          updatedBy: product.category.updatedBy
+        } : undefined
+      };
+
+      const duration = Number(process.hrtime.bigint() - startTime) / 1000000;
+      logger.auditPerformance('GET_PRODUCT_BY_SLUG', duration, {
+        slug
+      });
+
+      if (userId) {
+        logger.auditDataAccess(
+          userId,
+          'products',
+          product.id,
+          'READ',
+          {
+            productName: product.name,
+            slug
+          }
+        );
+      }
+
+      return result;
+
+    } catch (error) {
+      const duration = Number(process.hrtime.bigint() - startTime) / 1000000;
+      logger.error('Failed to get product by slug', error, {
+        slug,
+        performanceMetrics: { duration }
+      });
+      throw error instanceof Error ? error : new DatabaseError('Failed to get product');
+    }
+  }
+
+  async getProductById(id: string, userId?: string, includeDeleted = false): Promise<Product> {
+    const startTime = process.hrtime.bigint();
+
+    try {
+      const whereCondition: Prisma.ProductWhereInput = { id };
+      if (!includeDeleted) {
+        whereCondition.status = { not: 'DELETED' };
+      }
+
+      const product = await prisma.product.findFirst({
+        where: whereCondition,
         include: {
           category: true,
           productImages: {
@@ -158,6 +270,7 @@ export class ProductService {
         model: product.model,
         sku: product.sku,
         specifications: product.specifications as Record<string, any>,
+        categorySpecs: product.categorySpecs as any,
         price: Number(product.price),
         currency: product.currency || 'SAR',
         vatIncluded: product.vatIncluded || true,
@@ -261,6 +374,8 @@ export class ProductService {
 
       if (status) {
         where.status = status;
+      } else {
+        where.status = { not: 'DELETED' };
       }
 
       if (stockStatus) {
@@ -332,6 +447,7 @@ export class ProductService {
         model: product.model,
         sku: product.sku,
         specifications: product.specifications as Record<string, any>,
+        categorySpecs: product.categorySpecs as any,
         price: Number(product.price),
         currency: product.currency || 'SAR',
         vatIncluded: product.vatIncluded || true,
@@ -424,10 +540,13 @@ export class ProductService {
         : undefined;
 
       const result = await prisma.$transaction(async (tx) => {
+        // Exclude images from product update data
+        const { images, ...productUpdateData } = productData;
+
         const updateData: any = {
-          ...productData,
+          ...productUpdateData,
           stockStatus,
-          status: 'PENDING', 
+          status: 'PENDING',
           updatedBy: userId,
           updatedAt: new Date()
         };
@@ -437,8 +556,8 @@ export class ProductService {
           data: updateData
         });
 
-        if (productData.images) {
-          const imagesToDelete = productData.images.filter(img => img.action === 'delete' && img.id);
+        if (images) {
+          const imagesToDelete = images.filter(img => img.action === 'delete' && img.id);
           if (imagesToDelete.length > 0) {
             await tx.productImage.deleteMany({
               where: {
@@ -447,7 +566,7 @@ export class ProductService {
             });
           }
 
-          const imagesToAdd = productData.images.filter(img => img.action === 'add' || !img.action);
+          const imagesToAdd = images.filter(img => img.action === 'add' || !img.action);
           if (imagesToAdd.length > 0) {
             await tx.productImage.createMany({
               data: imagesToAdd.map((image, index) => ({
@@ -515,36 +634,32 @@ export class ProductService {
     try {
       const existingProduct = await this.getProductById(id);
 
-      // Delete product and its images in a transaction
-      await prisma.$transaction(async (tx) => {
-        // Delete product images first
-        await tx.productImage.deleteMany({
-          where: { productId: id }
-        });
-
-        // Delete the product
-        await tx.product.delete({
-          where: { id }
-        });
+      await prisma.product.update({
+        where: { id },
+        data: {
+          status: 'DELETED',
+          updatedBy: userId,
+          updatedAt: new Date()
+        }
       });
 
       const duration = Number(process.hrtime.bigint() - startTime) / 1000000;
-      logger.auditPerformance('DELETE_PRODUCT', duration, {
+      logger.auditPerformance('SOFT_DELETE_PRODUCT', duration, {
         productId: id
       });
 
       logger.auditBusinessOperation(
-        'DELETE_PRODUCT',
+        'SOFT_DELETE_PRODUCT',
         userId,
         'products',
         id,
         existingProduct,
-        null
+        { status: 'DELETED' }
       );
 
     } catch (error) {
       const duration = Number(process.hrtime.bigint() - startTime) / 1000000;
-      logger.error('Failed to delete product', error, {
+      logger.error('Failed to soft delete product', error, {
         productId: id,
         performanceMetrics: { duration }
       });
@@ -555,7 +670,55 @@ export class ProductService {
         }
       }
 
-      throw error instanceof Error ? error : new DatabaseError('Failed to delete product');
+      throw error instanceof Error ? error : new DatabaseError('Failed to soft delete product');
+    }
+  }
+
+  async hardDeleteProduct(id: string, userId: string): Promise<void> {
+    const startTime = process.hrtime.bigint();
+
+    try {
+      const existingProduct = await this.getProductById(id);
+
+      // Hard delete: Remove from database completely
+      await prisma.$transaction(async (tx) => {
+        await tx.productImage.deleteMany({
+          where: { productId: id }
+        });
+
+        await tx.product.delete({
+          where: { id }
+        });
+      });
+
+      const duration = Number(process.hrtime.bigint() - startTime) / 1000000;
+      logger.auditPerformance('HARD_DELETE_PRODUCT', duration, {
+        productId: id
+      });
+
+      logger.auditBusinessOperation(
+        'HARD_DELETE_PRODUCT',
+        userId,
+        'products',
+        id,
+        existingProduct,
+        null
+      );
+
+    } catch (error) {
+      const duration = Number(process.hrtime.bigint() - startTime) / 1000000;
+      logger.error('Failed to hard delete product', error, {
+        productId: id,
+        performanceMetrics: { duration }
+      });
+
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === 'P2025') {
+          throw ErrorFactory.notFound('Product', id);
+        }
+      }
+
+      throw error instanceof Error ? error : new DatabaseError('Failed to hard delete product');
     }
   }
 
@@ -677,6 +840,251 @@ export class ProductService {
       return 'LOW_STOCK';
     } else {
       return 'IN_STOCK';
+    }
+  }
+
+  async getProductStats(userId?: string, userRole: string): Promise<{
+    totalProducts: number;
+    activeProducts: number;
+    inactiveProducts: number;
+    pendingProducts: number;
+    outOfStockProducts: number;
+    lowStockProducts: number;
+    inStockProducts: number;
+    topCategories: Array<{ name: string; nameAr?: string; count: number; }>;
+    topBrands: Array<{ brand: string; count: number; }>;
+    recentProducts: number;
+    totalValue: number;
+  }> {
+    const startTime = process.hrtime.bigint();
+
+    try {
+      const baseWhere: Prisma.ProductWhereInput = {
+        status: { not: 'DELETED' }
+      };
+
+      if (userId) {
+        if (userRole === 'contractor') {
+          baseWhere.contractorId = userId;
+        }
+      }
+
+      const [
+        totalProducts,
+        activeProducts,
+        inactiveProducts,
+        pendingProducts,
+        outOfStockProducts,
+        lowStockProducts,
+        inStockProducts,
+        recentProducts
+      ] = await Promise.all([
+        prisma.product.count({ where: baseWhere }),
+        prisma.product.count({ where: { ...baseWhere, status: 'ACTIVE' } }),
+        prisma.product.count({ where: { ...baseWhere, status: 'INACTIVE' } }),
+        prisma.product.count({ where: { ...baseWhere, status: 'PENDING' } }),
+        prisma.product.count({ where: { ...baseWhere, stockStatus: 'OUT_OF_STOCK' } }),
+        prisma.product.count({ where: { ...baseWhere, stockStatus: 'LOW_STOCK' } }),
+        prisma.product.count({ where: { ...baseWhere, stockStatus: 'IN_STOCK' } }),
+        prisma.product.count({
+          where: {
+            ...baseWhere,
+            createdAt: { gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) } // Last 30 days
+          }
+        })
+      ]);
+
+      // Get top categories
+      const topCategoriesRaw = await prisma.product.groupBy({
+        by: ['categoryId'],
+        where: { ...baseWhere, status: 'ACTIVE' },
+        _count: { categoryId: true },
+        orderBy: { _count: { categoryId: 'desc' } },
+        take: 5
+      });
+
+      const topCategories = await Promise.all(
+        topCategoriesRaw.map(async (item) => {
+          const category = await prisma.category.findUnique({
+            where: { id: item.categoryId },
+            select: { name: true, nameAr: true }
+          });
+          return {
+            name: category?.name || 'Unknown',
+            nameAr: category?.nameAr,
+            count: item._count.categoryId
+          };
+        })
+      );
+
+      // Get top brands
+      const topBrands = await prisma.product.groupBy({
+        by: ['brand'],
+        where: { ...baseWhere, status: 'ACTIVE' },
+        _count: { brand: true },
+        orderBy: { _count: { brand: 'desc' } },
+        take: 5
+      });
+
+      const topBrandsFormatted = topBrands.map(item => ({
+        brand: item.brand,
+        count: item._count.brand
+      }));
+
+      // Calculate total value
+      const totalValueResult = await prisma.product.aggregate({
+        where: { ...baseWhere, status: 'ACTIVE' },
+        _sum: { price: true }
+      });
+
+      const totalValue = Number(totalValueResult._sum.price || 0);
+
+      const duration = Number(process.hrtime.bigint() - startTime) / 1000000;
+      logger.auditPerformance('GET_PRODUCT_STATS', duration, {
+        totalProducts,
+        userId
+      });
+
+      return {
+        totalProducts,
+        activeProducts,
+        inactiveProducts,
+        pendingProducts,
+        outOfStockProducts,
+        lowStockProducts,
+        inStockProducts,
+        topCategories,
+        topBrands: topBrandsFormatted,
+        recentProducts,
+        totalValue
+      };
+
+    } catch (error) {
+      const duration = Number(process.hrtime.bigint() - startTime) / 1000000;
+      logger.error('Failed to get product stats', error, {
+        userId,
+        performanceMetrics: { duration }
+      });
+      throw error instanceof Error ? error : new DatabaseError('Failed to get product stats');
+    }
+  }
+
+  async getPendingProductStats(userId?: string, userRole: string): Promise<{
+    totalPending: number;
+    pendingByCategory: Array<{ categoryName: string; categoryNameAr?: string; count: number; }>;
+    pendingByContractor: Array<{ contractorName: string; count: number; }>;
+    oldestPending: Date | null;
+    recentPending: number; // Last 7 days
+    avgApprovalTime: number | null; // In days
+  }> {
+    const startTime = process.hrtime.bigint();
+
+    try {
+      const baseWhere: Prisma.ProductWhereInput = {
+        status: 'PENDING'
+      };
+
+      if (userId) {
+        if (userRole === 'contractor') {
+          baseWhere.contractorId = userId;
+        }
+      }
+
+      const totalPending = await prisma.product.count({ where: baseWhere });
+
+      const pendingByCategoryRaw = await prisma.product.groupBy({
+        by: ['categoryId'],
+        where: baseWhere,
+        _count: { categoryId: true },
+        orderBy: { _count: { categoryId: 'desc' } }
+      });
+
+      const pendingByCategory = await Promise.all(
+        pendingByCategoryRaw.map(async (item) => {
+          const category = await prisma.category.findUnique({
+            where: { id: item.categoryId },
+            select: { name: true, nameAr: true }
+          });
+          return {
+            categoryName: category?.name || 'Unknown',
+            categoryNameAr: category?.nameAr,
+            count: item._count.categoryId
+          };
+        })
+      );
+
+      let pendingByContractor: Array<{ contractorName: string; count: number; }> = [];
+      if (!userId || userRole === 'admin' || userRole === 'super_admin') {
+        const pendingByContractorRaw = await prisma.product.groupBy({
+          by: ['contractorId', 'contractorName'],
+          where: baseWhere,
+          _count: { contractorId: true },
+          orderBy: { _count: { contractorId: 'desc' } },
+          take: 10
+        });
+
+        pendingByContractor = pendingByContractorRaw.map(item => ({
+          contractorName: item.contractorName || 'Unknown Contractor',
+          count: item._count.contractorId
+        }));
+      }
+
+      const oldestPendingProduct = await prisma.product.findFirst({
+        where: baseWhere,
+        orderBy: { createdAt: 'asc' },
+        select: { createdAt: true }
+      });
+
+      const recentPending = await prisma.product.count({
+        where: {
+          ...baseWhere,
+          createdAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }
+        }
+      });
+
+      const approvedProducts = await prisma.product.findMany({
+        where: {
+          status: { in: ['ACTIVE', 'INACTIVE'] },
+          updatedAt: { gte: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000) } // Last 90 days
+        },
+        select: {
+          createdAt: true,
+          updatedAt: true
+        },
+        take: 100
+      });
+
+      let avgApprovalTime: number | null = null;
+      if (approvedProducts.length > 0) {
+        const totalApprovalTime = approvedProducts.reduce((sum, product) => {
+          const approvalTime = product.updatedAt!.getTime() - product.createdAt!.getTime();
+          return sum + approvalTime;
+        }, 0);
+        avgApprovalTime = Math.round(totalApprovalTime / approvedProducts.length / (24 * 60 * 60 * 1000)); // Convert to days
+      }
+
+      const duration = Number(process.hrtime.bigint() - startTime) / 1000000;
+      logger.auditPerformance('GET_PENDING_PRODUCT_STATS', duration, {
+        totalPending,
+        userId
+      });
+
+      return {
+        totalPending,
+        pendingByCategory,
+        pendingByContractor,
+        oldestPending: oldestPendingProduct?.createdAt || null,
+        recentPending,
+        avgApprovalTime
+      };
+
+    } catch (error) {
+      const duration = Number(process.hrtime.bigint() - startTime) / 1000000;
+      logger.error('Failed to get pending product stats', error, {
+        userId,
+        performanceMetrics: { duration }
+      });
+      throw error instanceof Error ? error : new DatabaseError('Failed to get pending product stats');
     }
   }
 }

@@ -1,5 +1,66 @@
 import { z } from 'zod';
 
+// Category-specific specification schemas
+const BatteriesSpecSchema = z.object({
+  model: z.string().optional(),
+  capacity: z.string().optional(),
+  voltage: z.string().optional(),
+  currentAh: z.string().optional(),
+  cycleLife: z.string().optional(),
+  communication: z.string().optional(),
+  weightKg: z.string().optional(),
+  dimensionsMm: z.string().optional(),
+  warranty: z.string().optional()
+});
+
+const FullSystemsSpecSchema = z.object({
+  model: z.string().optional(),
+  systemPower: z.string().optional(),
+  peakPower: z.string().optional(),
+  acOutput: z.string().optional(),
+  batteryCapacity: z.string().optional(),
+  chargingPower: z.string().optional(),
+  solarConfiguration: z.string().optional(),
+  generatingCapacity: z.string().optional(),
+  mainUnitDimensionsMm: z.string().optional(),
+  secondaryUnitDimensionsMm: z.string().optional(),
+  totalWeight: z.string().optional(),
+  warranty: z.string().optional()
+});
+
+const InvertersSpecSchema = z.object({
+  model: z.string().optional(),
+  powerRate: z.string().optional(),
+  type: z.string().optional(),
+  mppts: z.string().optional(),
+  mpptRangeV: z.string().optional(),
+  maxInputCurrentA: z.string().optional(),
+  outputPhase: z.string().optional(),
+  communication: z.string().optional(),
+  weightKg: z.string().optional(),
+  warranty: z.string().optional()
+});
+
+const SolarPanelsSpecSchema = z.object({
+  model: z.string().optional(),
+  maxPower: z.string().optional(),
+  bindingSpecs: z.string().optional(),
+  efficiency: z.string().optional(),
+  operatingVoltage: z.string().optional(),
+  workingCurrent: z.string().optional(),
+  operatingTemperature: z.string().optional(),
+  weight: z.string().optional(),
+  dimensionsMm: z.string().optional(),
+  warranty: z.string().optional()
+});
+
+const CategorySpecsSchema = z.object({
+  batteries: BatteriesSpecSchema.optional(),
+  fullSystems: FullSystemsSpecSchema.optional(),
+  inverters: InvertersSpecSchema.optional(),
+  solarPanels: SolarPanelsSpecSchema.optional()
+});
+
 export const ProductCreateSchema = z.object({
   categoryId: z.string()
     .uuid('Invalid category ID format'),
@@ -40,6 +101,9 @@ export const ProductCreateSchema = z.object({
     .trim()
     .optional(),
   specifications: z.record(z.string(), z.any())
+    .optional()
+    .default({}),
+  categorySpecs: CategorySpecsSchema
     .optional()
     .default({}),
   price: z.number()
@@ -109,6 +173,8 @@ export const ProductUpdateSchema = z.object({
     .trim()
     .optional(),
   specifications: z.record(z.string(), z.any())
+    .optional(),
+  categorySpecs: CategorySpecsSchema
     .optional(),
   price: z.number()
     .positive('Price must be positive')

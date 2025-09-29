@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { categoryRoutes } from './category.routes';
 import { productRoutes } from './product.routes';
+import { uploadRoutes } from './upload.routes';
 
 const router = Router();
 
@@ -49,6 +50,8 @@ router.get('/api-info', (req, res) => {
           'GET /api/products - List products (paginated)',
           'GET /api/products/:id - Get product by ID',
           'GET /api/products/slug/:slug - Get product by slug',
+          'GET /api/products/stats - Get product statistics',
+          'GET /api/products/stats/pending - Get pending product statistics',
           'POST /api/products - Create product (contractor/admin)',
           'PUT /api/products/:id - Update product (contractor/admin)',
           'DELETE /api/products/:id - Delete product (contractor/admin)'
@@ -56,7 +59,8 @@ router.get('/api-info', (req, res) => {
         admin: [
           'GET /api/products/admin/pending - List pending products (admin only)',
           'POST /api/products/:id/approve - Approve/reject product (admin only)',
-          'POST /api/products/admin/bulk-action - Bulk operations (admin only)'
+          'POST /api/products/admin/bulk-action - Bulk operations (admin only)',
+          'DELETE /api/products/admin/delete/:id - Hard delete product (admin only)'
         ]
       },
       system: [

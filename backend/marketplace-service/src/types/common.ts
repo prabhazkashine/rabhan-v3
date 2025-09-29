@@ -85,6 +85,12 @@ export interface Product {
   model?: string;
   sku?: string;
   specifications?: Record<string, any>;
+  categorySpecs?: {
+    batteries?: Record<string, any>;
+    fullSystems?: Record<string, any>;
+    inverters?: Record<string, any>;
+    solarPanels?: Record<string, any>;
+  };
   price: number;
   currency: string;
   vatIncluded: boolean;

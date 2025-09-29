@@ -1,0 +1,31 @@
+{
+  "categoryId": "82e75813-6f9c-4ff8-abe8-bbae1c12bf57",
+  "contractorName": "Test Contractor",
+  "name": "Test Solar Inverter",
+  "description": "High-efficiency solar inverter for residential use",
+  "slug": "test-solar-inverter-specs",
+  "brand": "SolarTech",
+  "model": "ST-5000",
+  "sku": "ST5000-001",
+  "specifications": {
+    "general": "General specifications"
+  },
+  "categorySpecs": {
+    "inverters": {
+      "model": "ST-5000 Pro",
+      "powerRate": "5000W",
+      "type": "String Inverter",
+      "mppts": "2",
+      "mpptRangeV": "125-450V",
+      "maxInputCurrentA": "16A",
+      "outputPhase": "Single Phase",
+      "communication": "WiFi, RS485",
+      "weightKg": "22.5",
+      "warranty": "10 years"
+    }
+  },
+  "price": 2500,
+  "currency": "SAR",
+  "vatIncluded": true,
+  "stockQuantity": 15
+}

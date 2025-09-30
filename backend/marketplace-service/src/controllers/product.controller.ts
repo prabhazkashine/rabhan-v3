@@ -613,6 +613,102 @@ export class ProductController {
       next(error);
     }
   }
+
+  async getAllProductsForAdmin(req: Request, res: Response, next: NextFunction): Promise<void> {
+    const startTime = process.hrtime.bigint();
+
+    try {
+      const userId = validateUserId(req);
+      const userRole = req.headers['x-user-role'] as string;
+
+      if (!['admin', 'super_admin'].includes(userRole || '')) {
+        throw new ValidationError('Only administrators can view all products including deleted ones');
+      }
+
+      const queryOptions = ProductQuerySchema.parse(req.query);
+
+      const result = await productService.getAllProductsForAdmin(queryOptions, userId);
+
+      const response: ApiResponse<Product[]> = {
+        success: true,
+        data: result.products,
+        message: 'All products retrieved successfully',
+        meta: {
+          timestamp: new Date().toISOString(),
+          requestId: (req as AuthenticatedRequest).context?.requestId || 'unknown',
+          version: '1.0.0',
+          pagination: result.pagination
+        }
+      };
+
+      const duration = Number(process.hrtime.bigint() - startTime) / 1000000;
+      logger.auditPerformance('ADMIN_GET_ALL_PRODUCTS_ENDPOINT', duration, {
+        resultCount: result.products.length,
+        page: queryOptions.page,
+        limit: queryOptions.limit,
+        userId,
+        success: true
+      });
+
+      res.json(response);
+
+    } catch (error) {
+      const duration = Number(process.hrtime.bigint() - startTime) / 1000000;
+      logger.error('Get all products for admin failed in controller', error, {
+        query: req.query,
+        userId: (req as AuthenticatedRequest).user?.id,
+        requestId: (req as AuthenticatedRequest).context?.requestId || 'unknown',
+        performanceMetrics: { duration }
+      });
+      next(error);
+    }
+  }
+
+  async restoreDeletedProduct(req: Request, res: Response, next: NextFunction): Promise<void> {
+    const startTime = process.hrtime.bigint();
+
+    try {
+      const { id } = ProductParamsSchema.parse(req.params);
+      const userId = validateUserId(req);
+      const userRole = req.headers['x-user-role'] as string;
+
+      if (!['admin', 'super_admin'].includes(userRole || '')) {
+        throw new ValidationError('Only administrators can restore deleted products');
+      }
+
+      const product = await productService.restoreDeletedProduct(id, userId);
+
+      const response: ApiResponse<Product> = {
+        success: true,
+        data: product,
+        message: 'Product restored successfully and set to pending status',
+        meta: {
+          timestamp: new Date().toISOString(),
+          requestId: (req as AuthenticatedRequest).context?.requestId || 'unknown',
+          version: '1.0.0'
+        }
+      };
+
+      const duration = Number(process.hrtime.bigint() - startTime) / 1000000;
+      logger.auditPerformance('RESTORE_PRODUCT_ENDPOINT', duration, {
+        productId: id,
+        userId,
+        success: true
+      });
+
+      res.json(response);
+
+    } catch (error) {
+      const duration = Number(process.hrtime.bigint() - startTime) / 1000000;
+      logger.error('Restore product failed in controller', error, {
+        productId: req.params.id,
+        userId: (req as AuthenticatedRequest).user?.id,
+        requestId: (req as AuthenticatedRequest).context?.requestId || 'unknown',
+        performanceMetrics: { duration }
+      });
+      next(error);
+    }
+  }
 }
 
 // Export singleton instance

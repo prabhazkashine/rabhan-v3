@@ -1087,6 +1087,264 @@ export class ProductService {
       throw error instanceof Error ? error : new DatabaseError('Failed to get pending product stats');
     }
   }
+
+  async getAllProductsForAdmin(queryOptions: ProductQuery, userId: string): Promise<{
+    products: Product[];
+    pagination: PaginationMeta;
+  }> {
+    const startTime = process.hrtime.bigint();
+
+    try {
+      const {
+        page = 1,
+        limit = 10,
+        search,
+        categoryId,
+        contractorId,
+        status,
+        stockStatus,
+        minPrice,
+        maxPrice,
+        sortBy = 'createdAt',
+        sortOrder = 'desc'
+      } = queryOptions;
+
+      const skip = (page - 1) * limit;
+
+      const where: Prisma.ProductWhereInput = {};
+
+      if (categoryId) {
+        where.categoryId = categoryId;
+      }
+
+      if (contractorId) {
+        where.contractorId = contractorId;
+      }
+
+      // Include all statuses including DELETED
+      if (status) {
+        where.status = status;
+      }
+
+      if (stockStatus) {
+        where.stockStatus = stockStatus;
+      }
+
+      if (minPrice !== undefined || maxPrice !== undefined) {
+        where.price = {};
+        if (minPrice !== undefined) {
+          where.price.gte = minPrice;
+        }
+        if (maxPrice !== undefined) {
+          where.price.lte = maxPrice;
+        }
+      }
+
+      if (search) {
+        where.OR = [
+          { name: { contains: search, mode: 'insensitive' } },
+          { nameAr: { contains: search, mode: 'insensitive' } },
+          { description: { contains: search, mode: 'insensitive' } },
+          { descriptionAr: { contains: search, mode: 'insensitive' } },
+          { brand: { contains: search, mode: 'insensitive' } },
+          { model: { contains: search, mode: 'insensitive' } },
+          { sku: { contains: search, mode: 'insensitive' } }
+        ];
+      }
+
+      const orderBy: Prisma.ProductOrderByWithRelationInput = {};
+      if (sortBy === 'name') {
+        orderBy.name = sortOrder;
+      } else if (sortBy === 'price') {
+        orderBy.price = sortOrder;
+      } else if (sortBy === 'stockQuantity') {
+        orderBy.stockQuantity = sortOrder;
+      } else if (sortBy === 'brand') {
+        orderBy.brand = sortOrder;
+      } else {
+        orderBy.createdAt = sortOrder;
+      }
+
+      const [products, total] = await Promise.all([
+        prisma.product.findMany({
+          where,
+          orderBy,
+          skip,
+          take: limit,
+          include: {
+            category: true,
+            productImages: {
+              orderBy: { sortOrder: 'asc' }
+            }
+          }
+        }),
+        prisma.product.count({ where })
+      ]);
+
+      const result = products.map(product => ({
+        id: product.id,
+        contractorId: product.contractorId,
+        contractorName: product.contractorName,
+        categoryId: product.categoryId,
+        name: product.name,
+        nameAr: product.nameAr,
+        description: product.description,
+        descriptionAr: product.descriptionAr,
+        slug: product.slug,
+        brand: product.brand,
+        model: product.model,
+        sku: product.sku,
+        specifications: product.specifications as Record<string, any>,
+        categorySpecs: product.categorySpecs as any,
+        price: Number(product.price),
+        currency: product.currency || 'SAR',
+        vatIncluded: product.vatIncluded || true,
+        stockQuantity: product.stockQuantity,
+        stockStatus: product.stockStatus as 'IN_STOCK' | 'LOW_STOCK' | 'OUT_OF_STOCK',
+        status: product.status as 'PENDING' | 'ACTIVE' | 'INACTIVE' | 'DELETED',
+        createdAt: product.createdAt || new Date(),
+        updatedAt: product.updatedAt || new Date(),
+        createdBy: product.createdBy,
+        updatedBy: product.updatedBy,
+        productImages: product.productImages.map(img => ({
+          id: img.id,
+          productId: img.productId,
+          fileName: img.fileName,
+          filePath: img.filePath,
+          fileUrl: img.fileUrl,
+          sortOrder: img.sortOrder || 0,
+          isPrimary: img.isPrimary || false,
+          createdAt: img.createdAt || new Date()
+        })),
+        category: product.category ? {
+          id: product.category.id,
+          name: product.category.name,
+          nameAr: product.category.nameAr,
+          slug: product.category.slug,
+          description: product.category.description,
+          descriptionAr: product.category.descriptionAr,
+          icon: product.category.icon,
+          imageUrl: product.category.imageUrl,
+          sortOrder: product.category.sortOrder || 0,
+          isActive: product.category.isActive || true,
+          productsCount: product.category.productsCount || 0,
+          createdAt: product.category.createdAt || new Date(),
+          updatedAt: product.category.updatedAt || new Date(),
+          createdBy: product.category.createdBy,
+          updatedBy: product.category.updatedBy
+        } : undefined
+      }));
+
+      const totalPages = Math.ceil(total / limit);
+      const pagination: PaginationMeta = {
+        page,
+        limit,
+        total,
+        totalPages,
+        hasNext: page < totalPages,
+        hasPrev: page > 1
+      };
+
+      const duration = Number(process.hrtime.bigint() - startTime) / 1000000;
+      logger.auditPerformance('GET_ALL_PRODUCTS_ADMIN', duration, {
+        resultCount: products.length,
+        page,
+        limit,
+        search,
+        userId
+      });
+
+      logger.auditDataAccess(
+        userId,
+        'products',
+        'ALL',
+        'READ',
+        {
+          action: 'admin_get_all_products',
+          includesDeleted: true,
+          resultCount: products.length
+        }
+      );
+
+      return { products: result, pagination };
+
+    } catch (error) {
+      const duration = Number(process.hrtime.bigint() - startTime) / 1000000;
+      logger.error('Failed to get all products for admin', error, {
+        queryOptions,
+        userId,
+        performanceMetrics: { duration }
+      });
+      throw error instanceof Error ? error : new DatabaseError('Failed to get all products');
+    }
+  }
+
+  async restoreDeletedProduct(id: string, userId: string): Promise<Product> {
+    const startTime = process.hrtime.bigint();
+
+    try {
+      const existingProduct = await this.getProductById(id, userId, true);
+
+      if (existingProduct.status !== 'DELETED') {
+        throw new BusinessRuleError('Only deleted products can be restored');
+      }
+
+      const product = await prisma.product.update({
+        where: { id },
+        data: {
+          status: 'PENDING',
+          updatedBy: userId,
+          updatedAt: new Date()
+        }
+      });
+
+      const restoredProduct = await this.getProductById(id, userId);
+
+      const duration = Number(process.hrtime.bigint() - startTime) / 1000000;
+      logger.auditPerformance('RESTORE_PRODUCT', duration, {
+        productId: id
+      });
+
+      logger.auditBusinessOperation(
+        'RESTORE_PRODUCT',
+        userId,
+        'products',
+        id,
+        existingProduct,
+        restoredProduct
+      );
+
+      logger.auditDataAccess(
+        userId,
+        'products',
+        id,
+        'UPDATE',
+        {
+          action: 'restore_deleted_product',
+          oldStatus: 'DELETED',
+          newStatus: 'PENDING'
+        }
+      );
+
+      return restoredProduct;
+
+    } catch (error) {
+      const duration = Number(process.hrtime.bigint() - startTime) / 1000000;
+      logger.error('Failed to restore product', error, {
+        productId: id,
+        userId,
+        performanceMetrics: { duration }
+      });
+
+      if (error instanceof Prisma.PrismaClientKnownRequestError) {
+        if (error.code === 'P2025') {
+          throw ErrorFactory.notFound('Product', id);
+        }
+      }
+
+      throw error instanceof Error ? error : new DatabaseError('Failed to restore product');
+    }
+  }
 }
 
 export const productService = new ProductService();

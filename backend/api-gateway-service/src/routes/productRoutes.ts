@@ -92,10 +92,20 @@ productRouter.use('/products', (req: Request, res: Response, next: NextFunction)
     const publicPaths = ['/public'];
     const isPublicPath = publicPaths.some(path => req.path.startsWith(path));
 
-    const adminPaths = ['/approve'];
+    const adminPaths = ['/approve', '/admin/restore', '/admin/all'];
     const isAdminOnlyPath = adminPaths.some(path => {
-        const slugPattern = /^\/[^\/]+\/approve/;
-        return slugPattern.test(req.path);
+        if (path === '/approve') {
+            const slugPattern = /^\/[^\/]+\/approve/;
+            return slugPattern.test(req.path);
+        }
+        if (path === '/admin/restore') {
+            const restorePattern = /^\/admin\/restore\/[^\/]+/;
+            return restorePattern.test(req.path);
+        }
+        if (path === '/admin/all') {
+            return req.path === '/admin/all';
+        }
+        return false;
     });
 
     if (isPublicPath) {

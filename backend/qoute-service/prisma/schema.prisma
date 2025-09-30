@@ -1,0 +1,310 @@
+// =====================================================
+// RABHAN QUOTE SERVICE - PRISMA SCHEMA
+// =====================================================
+// Complete quote service database schema in Prisma format
+// Database: quote_service_db (rabhan_qoutes)
+// Version: 1.0.0
+// =====================================================
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =====================================================
+// BUSINESS CONFIGURATION
+// =====================================================
+model BusinessConfig {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  configKey   String    @unique @map("config_key") @db.VarChar(100)
+  configValue Json      @map("config_value") @db.JsonB
+  description String?   @db.Text
+  isActive    Boolean   @default(true) @map("is_active")
+  updatedBy   String?   @map("updated_by") @db.Uuid
+  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@map("business_config")
+}
+
+// =====================================================
+// QUOTE REQUESTS
+// =====================================================
+model QuoteRequest {
+  id                            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId                        String    @map("user_id") @db.Uuid
+  projectType                   String?   @map("project_type") @db.VarChar(50)
+  locationAddress               String    @map("location_address") @db.Text
+  locationCity                  String?   @map("location_city") @db.VarChar(100)
+  locationRegion                String?   @map("location_region") @db.VarChar(100)
+  propertyType                  String?   @map("property_type") @db.VarChar(50)
+  roofType                      String?   @map("roof_type") @db.VarChar(50)
+  electricityBillAmount         Decimal?  @map("electricity_bill_amount") @db.Decimal(10, 2)
+  preferredSystemSize           Decimal?  @map("preferred_system_size") @db.Decimal(10, 2)
+  budgetRange                   String?   @map("budget_range") @db.VarChar(50)
+  urgency                       String?   @db.VarChar(20)
+  additionalRequirements        String?   @map("additional_requirements") @db.Text
+  status                        String    @default("open") @db.VarChar(20)
+  contactPhone                  String?   @map("contact_phone")
+  createdAt                     DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt                     DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+  systemSizeKwp                 Decimal?  @map("system_size_kwp") @db.Decimal(10, 2)
+  serviceArea                   String?   @map("service_area") @db.VarChar(100)
+  locationGps                   String?   @map("location_gps") @db.Text
+  roofSizeSqm                   Decimal?  @map("roof_size_sqm") @db.Decimal(10, 2)
+  inspectionDates               Json      @default("[]") @map("inspection_dates") @db.JsonB
+  selectedContractors           String[]  @map("selected_contractors") @db.Uuid
+  maxContractors                Int       @default(3) @map("max_contractors")
+  inspectionPenaltyAcknowledged Boolean   @default(false) @map("inspection_penalty_acknowledged")
+  penaltyAmount                 Decimal   @default(0) @map("penalty_amount") @db.Decimal(10, 2)
+  cancelledAt                   DateTime? @map("cancelled_at") @db.Timestamptz(6)
+  cancellationReason            String?   @map("cancellation_reason") @db.Text
+  propertyDetails               Json      @default("{}") @map("property_details") @db.JsonB
+  electricityConsumption        Json      @default("{}") @map("electricity_consumption") @db.JsonB
+
+  // Relations
+  contractorAssignments ContractorQuoteAssignment[]
+  contractorQuotes      ContractorQuote[]           @relation("QuoteRequestToContractorQuote")
+  contractorQuotesAlt   ContractorQuote[]           @relation("RequestToContractorQuote")
+  legacyQuotes          Quote[]
+
+  @@index([userId], map: "idx_quote_requests_user_id")
+  @@index([status], map: "idx_quote_requests_status")
+  @@index([createdAt(sort: Desc)], map: "idx_quote_requests_created_at")
+  @@map("quote_requests")
+}
+
+// =====================================================
+// CONTRACTOR QUOTE ASSIGNMENTS
+// =====================================================
+model ContractorQuoteAssignment {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  requestId     String    @map("request_id") @db.Uuid
+  contractorId  String    @map("contractor_id") @db.Uuid
+  status        String    @default("assigned") @db.VarChar(50)
+  assignedAt    DateTime  @default(now()) @map("assigned_at") @db.Timestamptz(6)
+  viewedAt      DateTime? @map("viewed_at") @db.Timestamptz(6)
+  respondedAt   DateTime? @map("responded_at") @db.Timestamptz(6)
+  responseNotes String?   @map("response_notes") @db.Text
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt     DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  quoteRequest QuoteRequest @relation(fields: [requestId], references: [id])
+
+  @@unique([requestId, contractorId], map: "unique_contractor_request")
+  @@index([requestId], map: "idx_contractor_assignments_request_id")
+  @@index([contractorId], map: "idx_contractor_assignments_contractor_id")
+  @@index([status], map: "idx_contractor_assignments_status")
+  @@map("contractor_quote_assignments")
+}
+
+// =====================================================
+// CONTRACTOR QUOTES
+// =====================================================
+model ContractorQuote {
+  id                        String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  quoteRequestId            String?   @map("quote_request_id") @db.Uuid
+  requestId                 String?   @map("request_id") @db.Uuid
+  contractorId              String    @map("contractor_id") @db.Uuid
+  systemSizeKw              Decimal?  @map("system_size_kw") @db.Decimal(10, 2)
+  totalCost                 Decimal?  @map("total_cost") @db.Decimal(12, 2)
+  installationTimeline      String?   @map("installation_timeline") @db.VarChar(100)
+  warrantyYears             Int?      @map("warranty_years")
+  equipmentDetails          Json?     @map("equipment_details") @db.JsonB
+  pricingBreakdown          Json?     @map("pricing_breakdown") @db.JsonB
+  termsConditions           String?   @map("terms_conditions") @db.Text
+  validUntil                DateTime? @map("valid_until") @db.Timestamp(6)
+  status                    String    @default("submitted") @db.VarChar(20)
+  createdAt                 DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt                 DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+  basePrice                 Decimal?  @map("base_price") @db.Decimal(12, 2)
+  pricePerKwp               Decimal?  @map("price_per_kwp") @db.Decimal(10, 2)
+  overpriceAmount           Decimal   @default(0) @map("overprice_amount") @db.Decimal(12, 2)
+  totalUserPrice            Decimal?  @map("total_user_price") @db.Decimal(12, 2)
+  systemSpecs               Json      @default("{}") @map("system_specs") @db.JsonB
+  installationTimelineDays  Int?      @map("installation_timeline_days")
+  warrantyTerms             Json      @default("{}") @map("warranty_terms") @db.JsonB
+  maintenanceTerms          Json      @default("{}") @map("maintenance_terms") @db.JsonB
+  panelsBrand               String?   @map("panels_brand") @db.VarChar(100)
+  panelsModel               String?   @map("panels_model") @db.VarChar(100)
+  panelsQuantity            Int?      @map("panels_quantity")
+  inverterBrand             String?   @map("inverter_brand") @db.VarChar(100)
+  inverterModel             String?   @map("inverter_model") @db.VarChar(100)
+  inverterQuantity          Int?      @map("inverter_quantity")
+  adminStatus               String    @default("pending_review") @map("admin_status") @db.VarChar(50)
+  adminNotes                String?   @map("admin_notes") @db.Text
+  reviewedBy                String?   @map("reviewed_by") @db.Uuid
+  reviewedAt                DateTime? @map("reviewed_at") @db.Timestamptz(6)
+  rejectionReason           String?   @map("rejection_reason") @db.Text
+  isSelected                Boolean   @default(false) @map("is_selected")
+  selectedAt                DateTime? @map("selected_at") @db.Timestamptz(6)
+  expiresAt                 DateTime  @default(dbgenerated("(CURRENT_TIMESTAMP + '30 days'::interval)")) @map("expires_at") @db.Timestamptz(6)
+  contractorVatNumber       String?   @map("contractor_vat_number") @db.VarChar(50)
+  quotationNumber           String?   @map("quotation_number") @db.VarChar(100)
+  paymentTerms              String?   @map("payment_terms") @db.Text
+  deliveryTimeline          String?   @map("delivery_timeline") @db.VarChar(255)
+  specialConditions         String?   @map("special_conditions") @db.Text
+  technicalSpecifications   Json      @default("{}") @map("technical_specifications") @db.JsonB
+  installationDeadline      DateTime? @map("installation_deadline") @db.Date
+  contractorName            String?   @map("contractor_name") @db.VarChar(255)
+  contractorLicense         String?   @map("contractor_license") @db.VarChar(100)
+  contractorPhone           String?   @map("contractor_phone") @db.VarChar(20)
+  contractorEmail           String?   @map("contractor_email") @db.VarChar(255)
+  projectManager            String?   @map("project_manager") @db.VarChar(255)
+  estimatedCompletionDate   DateTime? @map("estimated_completion_date") @db.Date
+  quoteValidUntil           DateTime? @map("quote_valid_until") @db.Date
+  solarSystemCapacityKwp    Decimal?  @map("solar_system_capacity_kwp") @db.Decimal(10, 2)
+  storageCapacityKwh        Decimal?  @map("storage_capacity_kwh") @db.Decimal(10, 2)
+  energyOutputKwhPerYear    Decimal?  @map("energy_output_kwh_per_year") @db.Decimal(12, 2)
+  roiPercentage             Decimal?  @map("roi_percentage") @db.Decimal(5, 2)
+  paybackPeriodYears        Decimal?  @map("payback_period_years") @db.Decimal(4, 1)
+  co2SavingsTonsPerYear     Decimal?  @map("co2_savings_tons_per_year") @db.Decimal(8, 2)
+  monthlySavingsSar         Decimal?  @map("monthly_savings_sar") @db.Decimal(10, 2)
+  includesBattery           Boolean   @default(false) @map("includes_battery")
+  includesMonitoring        Boolean   @default(true) @map("includes_monitoring")
+  includesMaintenance       Boolean   @default(false) @map("includes_maintenance")
+  financingOptions          Json      @default("{}") @map("financing_options") @db.JsonB
+  installationNotes         String?   @map("installation_notes") @db.Text
+  siteSurveyRequired        Boolean   @default(true) @map("site_survey_required")
+  permitsIncluded           Boolean   @default(true) @map("permits_included")
+  gridConnectionIncluded    Boolean   @default(true) @map("grid_connection_included")
+  quoteReferences           Json      @default("{}") @map("quote_references") @db.JsonB
+  approvalStatus            String    @default("pending") @map("approval_status") @db.VarChar(50)
+  internalNotes             String?   @map("internal_notes") @db.Text
+  monthlyProductionKwh      Decimal?  @map("monthly_production_kwh") @db.Decimal(10, 2)
+
+  // Relations
+  quoteRequest        QuoteRequest?         @relation("QuoteRequestToContractorQuote", fields: [quoteRequestId], references: [id])
+  request             QuoteRequest?         @relation("RequestToContractorQuote", fields: [requestId], references: [id])
+  quotationLineItems  QuotationLineItem[]
+  invoices            Invoice[]
+
+  @@unique([contractorId, requestId], map: "unique_contractor_per_request")
+  @@index([contractorId], map: "idx_contractor_quotes_contractor_id")
+  @@index([quoteRequestId], map: "idx_contractor_quotes_request_id")
+  @@index([createdAt(sort: Desc)], map: "idx_contractor_quotes_created_at")
+  @@map("contractor_quotes")
+}
+
+// =====================================================
+// QUOTATION LINE ITEMS
+// =====================================================
+model QuotationLineItem {
+  id                String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  quotationId       String          @map("quotation_id") @db.Uuid
+  itemName          String          @map("item_name") @db.VarChar(255)
+  description       String?         @db.Text
+  quantity          Int             @default(1)
+  unitPrice         Decimal         @map("unit_price") @db.Decimal(12, 2)
+  totalPrice        Decimal?        @map("total_price") @db.Decimal(12, 2)
+  itemType          String?         @map("item_type") @db.VarChar(50)
+  sortOrder         Int             @default(0) @map("sort_order")
+  createdAt         DateTime        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt         DateTime        @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  units             String          @default("unit") @db.VarChar(50)
+  rabhanCommission  Decimal         @default(0) @map("rabhan_commission") @db.Decimal(12, 2)
+  vat               Decimal         @default(0) @db.Decimal(12, 2)
+  quotationNumber   String?         @map("quotation_number") @db.VarChar(100)
+  rabhanOverprice   Decimal         @default(0) @map("rabhan_overprice") @db.Decimal(12, 2)
+  userPrice         Decimal         @default(0) @map("user_price") @db.Decimal(12, 2)
+  vendorNetPrice    Decimal         @default(0) @map("vendor_net_price") @db.Decimal(12, 2)
+  lineOrder         Int             @default(0) @map("line_order")
+
+  // Relations
+  quotation ContractorQuote @relation(fields: [quotationId], references: [id])
+
+  @@index([quotationId], map: "idx_quotation_line_items_quotation_id")
+  @@map("quotation_line_items")
+}
+
+// =====================================================
+// CONTRACTOR WALLETS
+// =====================================================
+model ContractorWallet {
+  id                    String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  contractorId          String    @unique @map("contractor_id") @db.Uuid
+  currentBalance        Decimal   @default(0) @map("current_balance") @db.Decimal(12, 2)
+  pendingBalance        Decimal   @default(0) @map("pending_balance") @db.Decimal(12, 2)
+  withdrawableBalance   Decimal   @default(0) @map("withdrawable_balance") @db.Decimal(12, 2)
+  totalEarned           Decimal   @default(0) @map("total_earned") @db.Decimal(12, 2)
+  totalCommissionPaid   Decimal   @default(0) @map("total_commission_paid") @db.Decimal(12, 2)
+  totalPenalties        Decimal   @default(0) @map("total_penalties") @db.Decimal(12, 2)
+  totalWithdrawn        Decimal   @default(0) @map("total_withdrawn") @db.Decimal(12, 2)
+  bankAccountDetails    Json      @default("{}") @map("bank_account_details") @db.JsonB
+  paymentMethods        Json      @default("[]") @map("payment_methods") @db.JsonB
+  defaultPaymentMethod  String?   @map("default_payment_method") @db.VarChar(50)
+  isActive              Boolean   @default(true) @map("is_active")
+  isSuspended           Boolean   @default(false) @map("is_suspended")
+  suspensionReason      String?   @map("suspension_reason") @db.Text
+  suspendedAt           DateTime? @map("suspended_at") @db.Timestamptz(6)
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+  lastTransactionAt     DateTime? @map("last_transaction_at") @db.Timestamptz(6)
+
+  @@map("contractor_wallets")
+}
+
+// =====================================================
+// INVOICES
+// =====================================================
+model Invoice {
+  id                    String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  quoteId               String    @map("quote_id") @db.Uuid
+  invoiceNumber         String    @unique @map("invoice_number") @db.VarChar(100)
+  invoiceDate           DateTime  @default(now()) @map("invoice_date") @db.Date
+  dueDate               DateTime? @map("due_date") @db.Date
+  grossAmount           Decimal   @map("gross_amount") @db.Decimal(12, 2)
+  overpriceDeduction    Decimal   @default(0) @map("overprice_deduction") @db.Decimal(12, 2)
+  commissionDeduction   Decimal   @default(0) @map("commission_deduction") @db.Decimal(12, 2)
+  penaltyDeduction      Decimal   @default(0) @map("penalty_deduction") @db.Decimal(12, 2)
+  netAmount             Decimal   @map("net_amount") @db.Decimal(12, 2)
+  vatAmount             Decimal   @default(0) @map("vat_amount") @db.Decimal(12, 2)
+  totalWithVat          Decimal?  @map("total_with_vat") @db.Decimal(12, 2)
+  invoiceFileUrl        String?   @map("invoice_file_url") @db.Text
+  invoiceFileUploadedAt DateTime? @map("invoice_file_uploaded_at") @db.Timestamptz(6)
+  status                String    @default("pending") @db.VarChar(50)
+  paymentDate           DateTime? @map("payment_date") @db.Timestamptz(6)
+  paymentReference      String?   @map("payment_reference") @db.VarChar(100)
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  quote ContractorQuote @relation(fields: [quoteId], references: [id])
+
+  @@map("invoices")
+}
+
+// =====================================================
+// LEGACY QUOTES TABLE (FOR COMPATIBILITY)
+// =====================================================
+model Quote {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId          String    @map("user_id") @db.Uuid
+  contractorId    String?   @map("contractor_id") @db.Uuid
+  projectType     String    @map("project_type") @db.VarChar(50)
+  locationAddress String    @map("location_address") @db.Text
+  locationCity    String    @map("location_city") @db.VarChar(100)
+  locationRegion  String    @map("location_region") @db.VarChar(100)
+  systemSizeKw    Decimal?  @map("system_size_kw") @db.Decimal(10, 2)
+  estimatedCost   Decimal?  @map("estimated_cost") @db.Decimal(12, 2)
+  status          String    @default("pending") @db.VarChar(20)
+  quoteDetails    Json?     @map("quote_details") @db.JsonB
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.Timestamp(6)
+  expiresAt       DateTime? @map("expires_at") @db.Timestamp(6)
+  quoteRequestId  String?   @map("quote_request_id") @db.Uuid
+
+  // Relations
+  quoteRequest QuoteRequest? @relation(fields: [quoteRequestId], references: [id])
+
+  @@index([userId], map: "idx_quotes_user_id")
+  @@index([contractorId], map: "idx_quotes_contractor_id")
+  @@index([status], map: "idx_quotes_status")
+  @@map("quotes")
+}

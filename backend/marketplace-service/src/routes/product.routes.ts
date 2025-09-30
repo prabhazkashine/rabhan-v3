@@ -19,8 +19,16 @@ router.get('/stats/pending',
 );
 
 // Admin-only endpoints
+router.get('/admin/all',
+  productController.getAllProductsForAdmin
+);
+
 router.get('/admin/pending',
   productController.getPendingProducts
+);
+
+router.post('/admin/restore/:id',
+  productController.restoreDeletedProduct
 );
 
 // Specific slug route - MUST come before /:id route

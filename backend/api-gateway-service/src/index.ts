@@ -6,6 +6,7 @@ import { authenticateToken } from './middleware/authMiddleware';
 import adminRouter from './routes/adminRoutes';
 import documentRouter from './routes/documentRoutes';
 import productRouter from './routes/productRoutes';
+import qouteRouter from './routes/qouteRoutes';
 
 const app = express();
 const PORT = process.env.API_GATEWAY_PORT || 8000;
@@ -50,6 +51,8 @@ app.use('/api', productRouter);
 app.use('/api', documentRouter);
 app.use('/api', adminRouter);
 
+app.use('/api', qouteRouter);
+
 
 app.listen(PORT, () => {
   console.log(`✅ API Gateway running on port ${PORT}`);
@@ -60,5 +63,6 @@ app.listen(PORT, () => {
   - /api/products/public -> Product Service (No Auth - Public)
   - /api/products -> Product Service (Authenticated)
   - /api/documents -> Document Service (Authenticated)
+  - /api/quotes -> Qoute Service (Authenticated)
   `);
 });

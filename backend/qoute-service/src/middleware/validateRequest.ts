@@ -25,7 +25,7 @@ export function validateRequest(schema: ZodSchema, source: 'body' | 'query' = 'b
       next();
     } catch (error) {
       if (error instanceof ZodError) {
-        const errorMessages = error.errors.map((err) => ({
+        const errorMessages = error.issues.map((err: any) => ({
           field: err.path.join('.'),
           message: err.message,
         }));
@@ -44,7 +44,16 @@ export function validateRequest(schema: ZodSchema, source: 'body' | 'query' = 'b
         });
       }
 
-      next(error);
+      logger.error('Unexpected validation error', {
+        path: req.path,
+        method: req.method,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+
+      return res.status(400).json({
+        success: false,
+        message: error instanceof Error ? error.message : 'Validation error',
+      });
     }
   };
 }

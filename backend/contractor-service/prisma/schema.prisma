@@ -14,8 +14,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-
-
 // = an===========================================
 // ENUMS (Updated with Contractor-related values)
 // =============================================
@@ -86,9 +84,6 @@ enum ContractorType {
   solar_vendor_only
 }
 
-
-
-
 enum SupplierType {
   CONTRACTOR_VENDOR
   VENDOR_ONLY
@@ -117,29 +112,28 @@ enum SecRegistrationType {
   BOTH
 }
 
-
 // =============================================
 // CONTRACTOR MODELS
 // =============================================
 
 model Contractor {
-  id            String   @id @default(uuid()) @db.Uuid
-  firstName     String?  @map("first_name") @db.VarChar(100)
-  lastName      String?  @map("last_name") @db.VarChar(100)
-  email         String   @unique @db.VarChar(255)
-  passwordHash  String?  @map("password_hash") @db.VarChar(255)
-  phone         String?  @db.VarChar(20)
-  nationalId    String?  @unique @map("national_id") @db.VarChar(10)
+  id           String  @id @default(uuid()) @db.Uuid
+  firstName    String? @map("first_name") @db.VarChar(100)
+  lastName     String? @map("last_name") @db.VarChar(100)
+  email        String  @unique @db.VarChar(255)
+  passwordHash String? @map("password_hash") @db.VarChar(255)
+  phone        String? @db.VarChar(20)
+  nationalId   String? @unique @map("national_id") @db.VarChar(10)
 
   // --- Business Information ---
-  companyName   String   @default("To be updated") @map("company_name") @db.VarChar(255)
-  crNumber      String?  @map("cr_number") @db.VarChar(50)
-  vatNumber     String?  @map("vat_number") @db.VarChar(20)
-  businessType  String   @default("individual") @map("business_type") @db.VarChar(50)
+  companyName  String  @default("To be updated") @map("company_name") @db.VarChar(255)
+  crNumber     String? @map("cr_number") @db.VarChar(50)
+  vatNumber    String? @map("vat_number") @db.VarChar(20)
+  businessType String  @default("individual") @map("business_type") @db.VarChar(50)
 
   // --- Auth & Status Fields ---
-  provider      AuthProvider @default(EMAIL)
-  status        UserStatus   @default(PENDING)
+  provider AuthProvider @default(EMAIL)
+  status   UserStatus   @default(PENDING)
 
   // --- Security & Login Fields ---
   emailVerified   Boolean   @default(false) @map("email_verified")
@@ -151,171 +145,252 @@ model Contractor {
   lastLoginAt     DateTime? @map("last_login_at")
 
   // --- SAMA Compliance ---
-  samaVerified        Boolean   @default(false) @map("sama_verified")
+  samaVerified         Boolean   @default(false) @map("sama_verified")
   samaVerificationDate DateTime? @map("sama_verification_date")
 
+  // --- Commission ---
+  rabhanCommission  Int? @map("rabhan_commission")
+
   // --- Timestamps ---
-  createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
   // --- Relations ---
-  sessions                 ContractorSession[]
-  passwordResetTokens      PasswordResetToken[]
-  verificationTokens       VerificationToken[]
+  sessions            ContractorSession[]
+  passwordResetTokens PasswordResetToken[]
+  verificationTokens  VerificationToken[]
 
-  profile                  ContractorProfile? 
+  profile ContractorProfile?
+
+  // Availability and status relations
+  availabilitySettings ContractorAvailabilitySettings?
+  quickStatus          ContractorQuickStatus?          @relation("ContractorToQuickStatus")
 
   @@map("contractors")
 }
 
-
 model ContractorProfile {
-  id                      String            @id @default(uuid()) @db.Uuid
-  userId                  String            @unique @map("user_id") @db.Uuid // Foreign key to the Contractor auth model
-  
+  id     String @id @default(uuid()) @db.Uuid
+  userId String @unique @map("user_id") @db.Uuid // Foreign key to the Contractor auth model
+
   // --- Company Profile ---
-  companyProfileOverview  String?           @map("company_profile_overview") @db.Text
-  supplierType            SupplierType?     @map("supplier_type")
+  companyProfileOverview String?       @map("company_profile_overview") @db.Text
+  supplierType           SupplierType? @map("supplier_type")
 
   // --- Commercial Registration Details ---
-  registrationCity        String?           @map("registration_city") @db.VarChar(100)
-  registrationRegion      String?           @map("registration_region") @db.VarChar(100)
-  companyNameArabic       String?           @map("company_name_arabic") @db.VarChar(255)
-  companyNameEnglish      String?           @map("company_name_english") @db.VarChar(255)
-  commercialRegistrationNumber String?      @map("commercial_registration_number") @db.VarChar(100)
-  formerCompanyName       String?           @map("former_company_name") @db.VarChar(255)
-  commercialRegistrationExpiryDate DateTime? @map("commercial_registration_expiry_date")
+  registrationCity                        String?   @map("registration_city") @db.VarChar(100)
+  registrationRegion                      String?   @map("registration_region") @db.VarChar(100)
+  companyNameArabic                       String?   @map("company_name_arabic") @db.VarChar(255)
+  companyNameEnglish                      String?   @map("company_name_english") @db.VarChar(255)
+  commercialRegistrationNumber            String?   @map("commercial_registration_number") @db.VarChar(100)
+  formerCompanyName                       String?   @map("former_company_name") @db.VarChar(255)
+  commercialRegistrationExpiryDate        DateTime? @map("commercial_registration_expiry_date")
   commercialRegistrationEstablishmentDate DateTime? @map("commercial_registration_establishment_date")
-  isMainCommercialRegistration Boolean?     @map("is_main_commercial_registration")
-  isForeignOwned          Boolean?          @map("is_foreign_owned")
+  isMainCommercialRegistration            Boolean?  @map("is_main_commercial_registration")
+  isForeignOwned                          Boolean?  @map("is_foreign_owned")
 
   // --- General Organization for Social Insurance (GOSI) Details ---
-  gosiMembershipNumber    String?           @map("gosi_membership_number") @db.VarChar(50)
-  gosiCertificateExpiryDate DateTime?       @map("gosi_certificate_expiry_date")
-  numberOfSaudiEmployees  Int?              @map("number_of_saudi_employees")
-  numberOfNonSaudiEmployees Int?            @map("number_of_non_saudi_employees")
+  gosiMembershipNumber      String?   @map("gosi_membership_number") @db.VarChar(50)
+  gosiCertificateExpiryDate DateTime? @map("gosi_certificate_expiry_date")
+  numberOfSaudiEmployees    Int?      @map("number_of_saudi_employees")
+  numberOfNonSaudiEmployees Int?      @map("number_of_non_saudi_employees")
 
   // --- Ministry of Human Resources and Social Development - Nationalization Details ---
-  establishmentNumber     String?           @map("establishment_number") @db.VarChar(50)
-  nationalizationCertificateExpiryDate DateTime? @map("nationalization_certificate_expiry_date")
-  nitaqatLevel            NitaqatLevel?     @map("nitaqat_level")
-  organizationUnifiedNumber String?         @map("organization_unified_number") @db.VarChar(50)
+  establishmentNumber                  String?       @map("establishment_number") @db.VarChar(50)
+  nationalizationCertificateExpiryDate DateTime?     @map("nationalization_certificate_expiry_date")
+  nitaqatLevel                         NitaqatLevel? @map("nitaqat_level")
+  organizationUnifiedNumber            String?       @map("organization_unified_number") @db.VarChar(50)
 
   // --- Monsha'at (Jadeer) ---
-  isMonshaatCertified     Boolean?          @map("is_monshaat_certified")
-  monshaatIssuingDate     DateTime?         @map("monshaat_issuing_date")
-  monshaatExpiryDate      DateTime?         @map("monshaat_expiry_date")
-  enterpriseSize          EnterpriseSize?   @map("enterprise_size")
+  isMonshaatCertified Boolean?        @map("is_monshaat_certified")
+  monshaatIssuingDate DateTime?       @map("monshaat_issuing_date")
+  monshaatExpiryDate  DateTime?       @map("monshaat_expiry_date")
+  enterpriseSize      EnterpriseSize? @map("enterprise_size")
 
   // --- Zakat, Tax and Customs Authority (Zakat Details) ---
-  zakatUniqueNumber       String?           @map("zakat_unique_number") @db.VarChar(50)
-  zakatCertificateIssuingDate DateTime?      @map("zakat_certificate_issuing_date")
-  zakatCertificateExpiryDate DateTime?      @map("zakat_certificate_expiry_date")
+  zakatUniqueNumber           String?   @map("zakat_unique_number") @db.VarChar(50)
+  zakatCertificateIssuingDate DateTime? @map("zakat_certificate_issuing_date")
+  zakatCertificateExpiryDate  DateTime? @map("zakat_certificate_expiry_date")
 
   // --- (VAT) Registration Details ---
-  isVatRegistered         Boolean?          @map("is_vat_registered")
-  isVatGroupMember        Boolean?          @map("is_vat_group_member")
-  vatRegistrationNumber   String?           @map("vat_registration_number") @db.VarChar(20)
-  vatRegistrationIssuingDate DateTime?      @map("vat_registration_issuing_date")
-  vatRegistrationExpiryDate DateTime?       @map("vat_registration_expiry_date")
+  isVatRegistered            Boolean?  @map("is_vat_registered")
+  isVatGroupMember           Boolean?  @map("is_vat_group_member")
+  vatRegistrationNumber      String?   @map("vat_registration_number") @db.VarChar(20)
+  vatRegistrationIssuingDate DateTime? @map("vat_registration_issuing_date")
+  vatRegistrationExpiryDate  DateTime? @map("vat_registration_expiry_date")
 
   // --- Chamber of Commerce & Industry Membership Details ---
-  chamberOfCommerceMembershipNumber String? @map("chamber_of_commerce_membership_number") @db.VarChar(100)
-  chamberOfCommerceRegistrationCity String? @map("chamber_of_commerce_registration_city") @db.VarChar(100)
-  chamberOfCommerceIssuingDate DateTime?    @map("chamber_of_commerce_issuing_date")
-  chamberOfCommerceExpiryDate  DateTime?    @map("chamber_of_commerce_expiry_date")
+  chamberOfCommerceMembershipNumber String?   @map("chamber_of_commerce_membership_number") @db.VarChar(100)
+  chamberOfCommerceRegistrationCity String?   @map("chamber_of_commerce_registration_city") @db.VarChar(100)
+  chamberOfCommerceIssuingDate      DateTime? @map("chamber_of_commerce_issuing_date")
+  chamberOfCommerceExpiryDate       DateTime? @map("chamber_of_commerce_expiry_date")
 
   // --- Additional Government Permits and Licenses ---
-  civilDefenseLicenseNumber   String?       @map("civil_defense_license_number") @db.VarChar(50)
-  civilDefenseLicenseExpiryDate DateTime?   @map("civil_defense_license_expiry_date")
-  secRegistrationNumber       String?       @map("sec_registration_number") @db.VarChar(50)
-  secRegistrationType         SecRegistrationType? @map("sec_registration_type")
-  momraLicenseNumber          String?       @map("momra_license_number") @db.VarChar(50) // Ministry of Municipalities and Housing
+  civilDefenseLicenseNumber     String?              @map("civil_defense_license_number") @db.VarChar(50)
+  civilDefenseLicenseExpiryDate DateTime?            @map("civil_defense_license_expiry_date")
+  secRegistrationNumber         String?              @map("sec_registration_number") @db.VarChar(50)
+  secRegistrationType           SecRegistrationType? @map("sec_registration_type")
+  momraLicenseNumber            String?              @map("momra_license_number") @db.VarChar(50) // Ministry of Municipalities and Housing
 
   // --- Financial Requirement ---
-  iban                    String?           @map("iban") @db.VarChar(34)
+  iban String? @map("iban") @db.VarChar(34)
 
   // --- [Authorized Signatory ---
-  authorizedSignatoryNationalId String?     @map("authorized_signatory_national_id") @db.VarChar(10)
+  authorizedSignatoryNationalId    String?   @map("authorized_signatory_national_id") @db.VarChar(10)
   authorizedSignatoryIdIssuingDate DateTime? @map("authorized_signatory_id_issuing_date")
-  authorizedSignatoryIdExpiryDate DateTime? @map("authorized_signatory_id_expiry_date")
-  authorizedSignatoryEmail    String?       @map("authorized_signatory_email") @db.VarChar(255)
+  authorizedSignatoryIdExpiryDate  DateTime? @map("authorized_signatory_id_expiry_date")
+  authorizedSignatoryEmail         String?   @map("authorized_signatory_email") @db.VarChar(255)
 
   // --- Authorized Contact Person ---
-  authorizedContactPersonNationalId String? @map("authorized_contact_person_national_id") @db.VarChar(10)
+  authorizedContactPersonNationalId    String?   @map("authorized_contact_person_national_id") @db.VarChar(10)
   authorizedContactPersonIdIssuingDate DateTime? @map("authorized_contact_person_id_issuing_date")
-  authorizedContactPersonIdExpiryDate DateTime? @map("authorized_contact_person_id_expiry_date")
-  authorizedContactPersonEmail    String?   @map("authorized_contact_person_email") @db.VarChar(255)
+  authorizedContactPersonIdExpiryDate  DateTime? @map("authorized_contact_person_id_expiry_date")
+  authorizedContactPersonEmail         String?   @map("authorized_contact_person_email") @db.VarChar(255)
 
   // --- Service Agreement / Warranty / Selling Agreement / NDA ---
-  agreedToServiceAgreement    Boolean       @default(false) @map("agreed_to_service_agreement")
-  agreedToWarrantyObligation  Boolean       @default(false) @map("agreed_to_warranty_obligation")
-  agreedToSellingAgreement    Boolean       @default(false) @map("agreed_to_selling_agreement")
-  agreedToNda                 Boolean       @default(false) @map("agreed_to_nda")
+  agreedToServiceAgreement   Boolean @default(false) @map("agreed_to_service_agreement")
+  agreedToWarrantyObligation Boolean @default(false) @map("agreed_to_warranty_obligation")
+  agreedToSellingAgreement   Boolean @default(false) @map("agreed_to_selling_agreement")
+  agreedToNda                Boolean @default(false) @map("agreed_to_nda")
 
   // --- Profile Fields (Can be merged or used for other purposes) ---
-  businessType            BusinessType      @default(individual) @map("business_type")
-  email                   String            @db.VarChar(255)
-  phone                   String            @db.VarChar(20)
-  whatsapp                String?           @db.VarChar(20)
-  website                 String?           @db.VarChar(255)
-  addressLine1            String            @map("address_line1") @db.VarChar(255)
-  addressLine2            String?           @map("address_line2") @db.VarChar(255)
-  city                    String            @db.VarChar(100)
-  region                  String            @db.VarChar(100)
-  postalCode              String?           @map("postal_code") @db.VarChar(20)
-  country                 String            @default("Saudi Arabia") @db.VarChar(100)
-  latitude                Decimal?          @db.Decimal(10, 8)
-  longitude               Decimal?          @db.Decimal(11, 8)
-  establishedYear         Int?              @map("established_year")
-  employeeCount           Int?              @map("employee_count")
-  description             String?
-  descriptionAr           String?           @map("description_ar")
-  serviceCategories       ServiceCategory[] @default([residential_solar]) @map("service_categories")
-  serviceAreas            String[]          @default(["Riyadh"]) @map("service_areas")
-  yearsExperience         Int               @default(1) @map("years_experience")
-  contractorType          ContractorType    @default(full_solar_contractor) @map("contractor_type")
-  canInstall              Boolean           @default(true) @map("can_install")
-  canSupplyOnly           Boolean           @default(false) @map("can_supply_only")
-  status                  ContractorStatus  @default(pending)
-  verificationLevel       Int               @default(0) @map("verification_level")
-  adminVerifiedAt         DateTime?         @map("admin_verified_at")
-  adminVerifiedBy         String?           @map("admin_verified_by") @db.Uuid
-  totalProjects           Int               @default(0) @map("total_projects")
-  completedProjects       Int               @default(0) @map("completed_projects")
-  averageRating           Decimal           @default(0.00) @map("average_rating") @db.Decimal(3, 2)
-  totalReviews            Int               @default(0) @map("total_reviews")
-  responseTimeHours       Decimal?          @map("response_time_hours") @db.Decimal(5, 2)
-  bankAccountVerified     Boolean           @default(false) @map("bank_account_verified")
-  taxClearanceVerified    Boolean           @default(false) @map("tax_clearance_verified")
-  financialStandingVerified Boolean         @default(false) @map("financial_standing_verified")
-  preferredLanguage       String            @default("ar") @map("preferred_language") @db.VarChar(10)
-  emailNotifications      Boolean           @default(true) @map("email_notifications")
-  smsNotifications        Boolean           @default(true) @map("sms_notifications")
-  marketingConsent        Boolean           @default(false) @map("marketing_consent")
-  
+  businessType              BusinessType      @default(individual) @map("business_type")
+  email                     String            @db.VarChar(255)
+  phone                     String            @db.VarChar(20)
+  whatsapp                  String?           @db.VarChar(20)
+  website                   String?           @db.VarChar(255)
+  addressLine1              String            @map("address_line1") @db.VarChar(255)
+  addressLine2              String?           @map("address_line2") @db.VarChar(255)
+  city                      String            @db.VarChar(100)
+  region                    String            @db.VarChar(100)
+  postalCode                String?           @map("postal_code") @db.VarChar(20)
+  country                   String            @default("Saudi Arabia") @db.VarChar(100)
+  latitude                  Decimal?          @db.Decimal(10, 8)
+  longitude                 Decimal?          @db.Decimal(11, 8)
+  establishedYear           Int?              @map("established_year")
+  employeeCount             Int?              @map("employee_count")
+  description               String?
+  descriptionAr             String?           @map("description_ar")
+  serviceCategories         ServiceCategory[] @default([residential_solar]) @map("service_categories")
+  serviceAreas              String[]          @default(["Riyadh"]) @map("service_areas")
+  yearsExperience           Int               @default(1) @map("years_experience")
+  contractorType            ContractorType    @default(full_solar_contractor) @map("contractor_type")
+  canInstall                Boolean           @default(true) @map("can_install")
+  canSupplyOnly             Boolean           @default(false) @map("can_supply_only")
+  status                    ContractorStatus  @default(pending)
+  verificationLevel         Int               @default(0) @map("verification_level")
+  adminVerifiedAt           DateTime?         @map("admin_verified_at")
+  adminVerifiedBy           String?           @map("admin_verified_by") @db.Uuid
+  totalProjects             Int               @default(0) @map("total_projects")
+  completedProjects         Int               @default(0) @map("completed_projects")
+  averageRating             Decimal           @default(0.00) @map("average_rating") @db.Decimal(3, 2)
+  totalReviews              Int               @default(0) @map("total_reviews")
+  responseTimeHours         Decimal?          @map("response_time_hours") @db.Decimal(5, 2)
+  bankAccountVerified       Boolean           @default(false) @map("bank_account_verified")
+  taxClearanceVerified      Boolean           @default(false) @map("tax_clearance_verified")
+  financialStandingVerified Boolean           @default(false) @map("financial_standing_verified")
+  preferredLanguage         String            @default("ar") @map("preferred_language") @db.VarChar(10)
+  emailNotifications        Boolean           @default(true) @map("email_notifications")
+  smsNotifications          Boolean           @default(true) @map("sms_notifications")
+  marketingConsent          Boolean           @default(false) @map("marketing_consent")
+
   // --- System Fields ---
-  createdAt               DateTime          @default(now()) @map("created_at")
-  updatedAt               DateTime          @updatedAt @map("updated_at")
-  deletedAt               DateTime?         @map("deleted_at")
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
 
   // --- Audit Fields ---
-  createdBy               String?           @map("created_by") @db.Uuid
-  updatedBy               String?           @map("updated_by") @db.Uuid
-  ipAddress               String?           @map("ip_address") @db.Inet
-  userAgent               String?           @map("user_agent")
+  createdBy String? @map("created_by") @db.Uuid
+  updatedBy String? @map("updated_by") @db.Uuid
+  ipAddress String? @map("ip_address") @db.Inet
+  userAgent String? @map("user_agent")
 
   // --- Relation to Auth Model ---
-  contractor              Contractor        @relation(fields: [userId], references: [id], onDelete: Cascade)
+  contractor Contractor @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("contractors_profiles")
 }
 
+model ContractorAvailabilitySettings {
+  id           String @id @default(uuid()) @db.Uuid
+  contractorId String @unique @map("contractor_id") @db.Uuid
+
+  // Weekly Schedule (stored as strings in HH:MM format)
+  sundayStart    String? @map("sunday_start") @db.VarChar(5)
+  sundayEnd      String? @map("sunday_end") @db.VarChar(5)
+  mondayStart    String? @map("monday_start") @db.VarChar(5)
+  mondayEnd      String? @map("monday_end") @db.VarChar(5)
+  tuesdayStart   String? @map("tuesday_start") @db.VarChar(5)
+  tuesdayEnd     String? @map("tuesday_end") @db.VarChar(5)
+  wednesdayStart String? @map("wednesday_start") @db.VarChar(5)
+  wednesdayEnd   String? @map("wednesday_end") @db.VarChar(5)
+  thursdayStart  String? @map("thursday_start") @db.VarChar(5)
+  thursdayEnd    String? @map("thursday_end") @db.VarChar(5)
+  fridayStart    String? @map("friday_start") @db.VarChar(5)
+  fridayEnd      String? @map("friday_end") @db.VarChar(5)
+  saturdayStart  String? @map("saturday_start") @db.VarChar(5)
+  saturdayEnd    String? @map("saturday_end") @db.VarChar(5)
+
+  // Quote Management Settings
+  bufferBetweenQuotesMinutes Int  @default(60) @map("buffer_between_quotes_minutes")
+  maxQuotesPerDay            Int  @default(5) @map("max_quotes_per_day")
+  advanceNoticeHours         Int? @default(4) @map("advance_notice_hours")
+
+  // Contact Preferences
+  preferredContactMethod String? @default("phone") @map("preferred_contact_method") @db.VarChar(50)
+  responseTimeHours      Int?    @default(2) @map("response_time_hours")
+
+  // Availability Status
+  isCurrentlyAvailable Boolean @default(true) @map("is_currently_available")
+  statusMessage        String? @map("status_message") @db.Text
+
+  // System Settings
+  timezone String  @default("Asia/Riyadh") @db.VarChar(50)
+  isActive Boolean @default(true) @map("is_active")
+
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  contractor  Contractor             @relation(fields: [contractorId], references: [id], onDelete: Cascade)
+  quickStatus ContractorQuickStatus?
+
+  @@index([contractorId])
+  @@index([isActive])
+  @@map("contractor_availability_settings")
+}
+
+model ContractorQuickStatus {
+  id           String @id @default(uuid()) @db.Uuid
+  contractorId String @unique @map("contractor_id") @db.Uuid
+
+  // Current Status
+  currentStatus     String    @default("available") @map("current_status") @db.VarChar(50)
+  statusUntil       DateTime? @map("status_until") @db.Timestamptz(6)
+  unavailableReason String?   @map("unavailable_reason") @db.Text
+
+  // Activity Tracking
+  lastSeenAt          DateTime  @default(now()) @map("last_seen_at") @db.Timestamptz(6)
+  lastQuoteReceivedAt DateTime? @map("last_quote_received_at") @db.Timestamptz(6)
+
+  // Timestamps
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  contractor           Contractor                     @relation("ContractorToQuickStatus", fields: [contractorId], references: [id], onDelete: Cascade, map: "contractor_quick_status_contractor_fkey")
+  availabilitySettings ContractorAvailabilitySettings @relation(fields: [contractorId], references: [contractorId], map: "contractor_quick_status_availability_fkey")
+
+  @@index([contractorId])
+  @@index([currentStatus])
+  @@map("contractor_quick_status")
+}
 
 // model ContractorProfile {
 //   id                      String            @id @default(uuid()) @db.Uuid
 //   userId                  String            @unique @map("user_id") @db.Uuid // Foreign key to the Contractor auth model
-  
+
 //   // --- Basic Information ---
 //   businessName            String            @map("business_name") @db.VarChar(255)
 //   businessNameAr          String?           @map("business_name_ar") @db.VarChar(255)
@@ -398,7 +473,6 @@ model ContractorProfile {
 //   @@map("contractors_profiles") 
 // }
 
-
 model ContractorSession {
   id             String   @id @default(uuid()) @db.Uuid
   contractorId   String   @map("contractor_id") @db.Uuid
@@ -415,7 +489,6 @@ model ContractorSession {
   @@map("contractor_sessions")
 }
 
-
 model PasswordResetToken {
   id        String   @id @default(uuid()) @db.Uuid
   userId    String   @map("user_id") @db.Uuid
@@ -429,12 +502,12 @@ model PasswordResetToken {
 }
 
 model VerificationToken {
-  id          String           @id @default(uuid()) @db.Uuid
-  userId      String           @map("user_id") @db.Uuid
-  type        VerificationType // Will be EMAIL for registration
-  token       String           @unique @db.VarChar(255)
-  expiresAt   DateTime         @map("expires_at")
-  createdAt   DateTime         @default(now()) @map("created_at")
+  id        String           @id @default(uuid()) @db.Uuid
+  userId    String           @map("user_id") @db.Uuid
+  type      VerificationType // Will be EMAIL for registration
+  token     String           @unique @db.VarChar(255)
+  expiresAt DateTime         @map("expires_at")
+  createdAt DateTime         @default(now()) @map("created_at")
 
   user Contractor @relation(fields: [userId], references: [id], onDelete: Cascade)
 

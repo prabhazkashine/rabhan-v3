@@ -19,6 +19,16 @@ const createProxy = (target: string, pathRewrites: PathRewriteMap = {}): HpmRequ
   });
 };
 
+
+const superAdminAuth: RequestHandler = (req, res, next) => {
+    const userRole = req.headers['x-user-role'];
+
+    if (userRole !== 'super_admin') {
+        return res.status(403).send('Forbidden: Only Super Admin can access this resource.');
+    }
+    next();
+};
+
 const userAuth: RequestHandler = (req, res, next) => {
     if (!req.headers['x-user-role']) {
         return res.status(401).send('Unauthorized: Please log in.');
@@ -34,9 +44,20 @@ const documentProxy = createProxy(QOUTE_SERVICE_URL!, {
 
 
 
+const businessConfigProxy = createProxy(QOUTE_SERVICE_URL!, {
+    '^/': '/api/business-config/',
+});
+
 qouteRouter.use('/quotes',
     userAuth,
     documentProxy
 );
+
+
+qouteRouter.use('/business-config',
+    superAdminAuth,
+    businessConfigProxy
+);
+
 
 export default qouteRouter;

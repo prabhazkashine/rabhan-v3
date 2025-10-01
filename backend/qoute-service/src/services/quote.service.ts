@@ -3,6 +3,9 @@ import { logger, performanceLogger, auditLogger } from '../utils/logger';
 import { ValidationError, handlePrismaError, NotFoundError, BusinessRuleError, ConflictError } from '../utils/errors';
 import { CreateQuoteRequestDTO, QuoteRequestResponse } from '../types/quote.types';
 import { contractorService } from './contractor.service';
+import { QuoteAssignment } from '../types/quote-assignments.types';
+import { AdminContractorQuote } from '../types/admin-contractor-quotes.types';
+import { ApproveQuoteDTO, RejectQuoteDTO } from '../types/admin-quote-actions.types';
 import { ContractorFilters, AvailableContractor } from '../types/contractor.types';
 import { financialService } from './financial.service';
 import { SubmitQuoteDTO, ContractorQuoteResponse } from '../types/quote-submission.types';
@@ -34,6 +37,13 @@ import {
   QuotationTotalsResponse,
   ContractorQuoteLineItem,
 } from '../types/contractor-quotes.types';
+import {
+  GetAdminQuotesFilters,
+  AdminQuoteRequest,
+  PaginatedAdminQuotes,
+} from '../types/admin-quotes.types';
+import { userPrisma } from '../lib/userPrisma';
+import { Prisma } from '@prisma/client';
 
 export class QuoteService {
   /**
@@ -1444,6 +1454,668 @@ export class QuoteService {
       throw handlePrismaError(error);
     } finally {
       timer.end({ request_id: requestId });
+    }
+  }
+
+  /**
+   * Get all quotes with optional filters (for admin dashboard)
+   */
+  async getAllQuotes(filters: GetAdminQuotesFilters = {}): Promise<PaginatedAdminQuotes> {
+    const timer = performanceLogger.startTimer('get_all_quotes');
+
+    try {
+      const {
+        page = 1,
+        limit = 20,
+        sort_by = 'created_at',
+        sort_order = 'desc',
+        status,
+        search,
+        contractor_id,
+        min_amount,
+        max_amount,
+      } = filters;
+
+      const skip = (page - 1) * limit;
+
+      const where: any = {};
+
+      if (status) {
+        where.status = status;
+      }
+
+      if (search) {
+        where.OR = [
+          { locationAddress: { contains: search, mode: 'insensitive' } },
+          { serviceArea: { contains: search, mode: 'insensitive' } },
+        ];
+      }
+
+      if (contractor_id) {
+        where.selectedContractors = {
+          has: contractor_id,
+        };
+      }
+
+      if (min_amount || max_amount) {
+        where.systemSizeKwp = {};
+        if (min_amount) {
+          where.systemSizeKwp.gte = min_amount / 2000; // Convert SAR to kWp (assuming base rate)
+        }
+        if (max_amount) {
+          where.systemSizeKwp.lte = max_amount / 2000;
+        }
+      }
+
+      const total = await prisma.quoteRequest.count({ where });
+
+      let orderBy: any = {};
+      if (sort_by === 'created_at') {
+        orderBy.createdAt = sort_order;
+      } else if (sort_by === 'updated_at') {
+        orderBy.updatedAt = sort_order;
+      } else if (sort_by === 'system_size_kwp') {
+        orderBy.systemSizeKwp = sort_order;
+      } else {
+        orderBy.createdAt = sort_order; // default
+      }
+
+      const quoteRequests = await prisma.quoteRequest.findMany({
+        where,
+        include: {
+          _count: {
+            select: {
+              contractorAssignments: true,
+              contractorQuotes: true,
+            },
+          },
+          contractorQuotes: {
+            where: {
+              adminStatus: 'approved',
+            },
+            select: {
+              id: true,
+            },
+          },
+        },
+        orderBy,
+        skip,
+        take: limit,
+      });
+
+      const userIds = [...new Set(quoteRequests.map((qr) => qr.userId))];
+
+      const userDetailsMap: { [key: string]: any } = {};
+
+      if (userIds.length > 0) {
+        try {
+          const users = await userPrisma.$queryRaw<Array<{
+            id: string;
+            first_name: string | null;
+            last_name: string | null;
+            email: string;
+            phone: string | null;
+          }>>`
+            SELECT id, first_name, last_name, email, phone
+            FROM users
+            WHERE id = ANY(${Prisma.raw(`ARRAY['${userIds.join("','")}']::uuid[]`)})
+          `;
+
+          users.forEach((user) => {
+            userDetailsMap[user.id] = user;
+          });
+        } catch (userError) {
+          logger.warn('Failed to fetch user details from user service', {
+            error: userError instanceof Error ? userError.message : 'Unknown error',
+          });
+        }
+      }
+
+      const quotes: AdminQuoteRequest[] = quoteRequests.map((qr) => {
+        const propertyDetails =
+          typeof qr.propertyDetails === 'string'
+            ? JSON.parse(qr.propertyDetails)
+            : qr.propertyDetails || {};
+
+        const user = userDetailsMap[qr.userId];
+
+        let userEmail: string;
+        let userFirstName: string;
+        let userLastName: string;
+        let userPhone: string | null;
+
+        if (user) {
+          userEmail = user.email || `user-${qr.userId.slice(-8)}@rabhan.sa`;
+          userFirstName = user.first_name || 'User';
+          userLastName = user.last_name || qr.userId.slice(-4);
+          userPhone = user.phone || propertyDetails.contact_phone || null;
+        } else {
+          const contactEmail =
+            propertyDetails.contact_email ||
+            propertyDetails.email ||
+            `customer-${qr.userId.slice(-8)}@rabhan.sa`;
+
+          const contactName =
+            propertyDetails.contact_name || propertyDetails.customer_name || propertyDetails.name;
+
+          if (contactName) {
+            const nameParts = contactName.trim().split(' ');
+            userFirstName = nameParts[0] || 'Customer';
+            userLastName = nameParts.slice(1).join(' ') || qr.userId.slice(-4);
+          } else {
+            userFirstName = 'Customer';
+            userLastName = qr.userId.slice(-4);
+          }
+
+          userEmail = contactEmail;
+          userPhone = propertyDetails.contact_phone || propertyDetails.phone || null;
+        }
+
+        return {
+          id: qr.id,
+          user_id: qr.userId,
+          user_email: userEmail,
+          user_first_name: userFirstName,
+          user_last_name: userLastName,
+          user_phone: userPhone,
+          system_size_kwp: parseFloat(qr.systemSizeKwp?.toString() || '0'),
+          location_address: qr.locationAddress,
+          service_area: qr.serviceArea || '',
+          status: qr.status,
+          property_details: propertyDetails,
+          electricity_consumption: qr.electricityConsumption,
+          created_at: qr.createdAt,
+          updated_at: qr.updatedAt,
+          assigned_contractors_count: qr._count.contractorAssignments,
+          received_quotes_count: qr._count.contractorQuotes,
+          approved_quotes_count: qr.contractorQuotes.length,
+        };
+      });
+
+      logger.info('Retrieved all quotes for admin dashboard', {
+        total,
+        page,
+        limit,
+        status,
+        search,
+        returned_count: quotes.length,
+      });
+
+      return {
+        quotes,
+        total,
+        page,
+        limit,
+        pages: Math.ceil(total / limit),
+      };
+    } catch (error) {
+      logger.error('Failed to get all quotes for admin', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        filters,
+      });
+      throw handlePrismaError(error);
+    } finally {
+      timer.end();
+    }
+  }
+
+  /**
+   * Get a single quote by ID with enhanced user data (for admin)
+   */
+  async getQuoteById(quoteId: string): Promise<AdminQuoteRequest | null> {
+    const timer = performanceLogger.startTimer('get_quote_by_id');
+
+    try {
+      const quoteRequest = await prisma.quoteRequest.findUnique({
+        where: { id: quoteId },
+        include: {
+          _count: {
+            select: {
+              contractorAssignments: true,
+              contractorQuotes: true,
+            },
+          },
+          contractorQuotes: {
+            where: {
+              adminStatus: 'approved',
+            },
+            select: {
+              id: true,
+            },
+          },
+        },
+      });
+
+      if (!quoteRequest) {
+        return null;
+      }
+
+      let userDetails: {
+        id: string;
+        first_name: string | null;
+        last_name: string | null;
+        email: string;
+        phone: string | null;
+      } | null = null;
+
+      try {
+        const users = await userPrisma.$queryRaw<Array<{
+          id: string;
+          first_name: string | null;
+          last_name: string | null;
+          email: string;
+          phone: string | null;
+        }>>`
+          SELECT id, first_name, last_name, email, phone
+          FROM users
+          WHERE id = ${quoteRequest.userId}::uuid
+        `;
+
+        if (users.length > 0) {
+          userDetails = users[0];
+        }
+      } catch (userError) {
+        logger.warn('Failed to fetch user details from user service', {
+          user_id: quoteRequest.userId,
+          error: userError instanceof Error ? userError.message : 'Unknown error',
+        });
+      }
+
+      const propertyDetails =
+        typeof quoteRequest.propertyDetails === 'string'
+          ? JSON.parse(quoteRequest.propertyDetails)
+          : quoteRequest.propertyDetails || {};
+
+      let userEmail: string;
+      let userFirstName: string;
+      let userLastName: string;
+      let userPhone: string | null;
+
+      if (userDetails) {
+        userEmail = userDetails.email || `user-${quoteRequest.userId.slice(-8)}@rabhan.sa`;
+        userFirstName = userDetails.first_name || 'User';
+        userLastName = userDetails.last_name || quoteRequest.userId.slice(-4);
+        userPhone = userDetails.phone || propertyDetails.contact_phone || null;
+      } else {
+        const contactEmail =
+          propertyDetails.contact_email ||
+          propertyDetails.email ||
+          `customer-${quoteRequest.userId.slice(-8)}@rabhan.sa`;
+
+        const contactName =
+          propertyDetails.contact_name || propertyDetails.customer_name || propertyDetails.name;
+
+        if (contactName) {
+          const nameParts = contactName.trim().split(' ');
+          userFirstName = nameParts[0] || 'Customer';
+          userLastName = nameParts.slice(1).join(' ') || quoteRequest.userId.slice(-4);
+        } else {
+          userFirstName = 'Customer';
+          userLastName = quoteRequest.userId.slice(-4);
+        }
+
+        userEmail = contactEmail;
+        userPhone = propertyDetails.contact_phone || propertyDetails.phone || null;
+      }
+
+      const quote: AdminQuoteRequest = {
+        id: quoteRequest.id,
+        user_id: quoteRequest.userId,
+        user_email: userEmail,
+        user_first_name: userFirstName,
+        user_last_name: userLastName,
+        user_phone: userPhone,
+        system_size_kwp: parseFloat(quoteRequest.systemSizeKwp?.toString() || '0'),
+        location_address: quoteRequest.locationAddress,
+        service_area: quoteRequest.serviceArea || '',
+        status: quoteRequest.status,
+        property_details: propertyDetails,
+        electricity_consumption: quoteRequest.electricityConsumption,
+        created_at: quoteRequest.createdAt,
+        updated_at: quoteRequest.updatedAt,
+        assigned_contractors_count: quoteRequest._count.contractorAssignments,
+        received_quotes_count: quoteRequest._count.contractorQuotes,
+        approved_quotes_count: quoteRequest.contractorQuotes.length,
+      };
+
+      logger.info('Retrieved quote details by ID', {
+        quote_id: quoteId,
+        has_user_data: !!userDetails,
+      });
+
+      return quote;
+    } catch (error) {
+      logger.error('Failed to get quote by ID', {
+        quote_id: quoteId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      throw handlePrismaError(error);
+    } finally {
+      timer.end({ quote_id: quoteId });
+    }
+  }
+
+  /**
+   * Get contractor assignments for a specific quote (for admin)
+   */
+  async getQuoteAssignments(quoteId: string): Promise<QuoteAssignment[]> {
+    const timer = performanceLogger.startTimer('get_quote_assignments');
+
+    try {
+      const assignments = await prisma.contractorQuoteAssignment.findMany({
+        where: { requestId: quoteId },
+        include: {
+          quoteRequest: {
+            select: {
+              id: true,
+            },
+          },
+        },
+        orderBy: { assignedAt: 'asc' },
+      });
+
+      if (assignments.length === 0) {
+        logger.info('No assignments found for quote', { quote_id: quoteId });
+        return [];
+      }
+
+      const contractorIds = assignments.map((a) => a.contractorId);
+
+      const contractorQuotes = await prisma.contractorQuote.findMany({
+        where: {
+          requestId: quoteId,
+          contractorId: { in: contractorIds },
+        },
+        select: {
+          contractorId: true,
+          basePrice: true,
+          totalUserPrice: true,
+          installationTimelineDays: true,
+          isSelected: true,
+          adminStatus: true,
+        },
+      });
+
+      const quotesMap = new Map(
+        contractorQuotes.map((q) => [
+          q.contractorId,
+          {
+            base_price: q.basePrice ? parseFloat(q.basePrice.toString()) : null,
+            total_user_price: q.totalUserPrice ? parseFloat(q.totalUserPrice.toString()) : null,
+            installation_timeline_days: q.installationTimelineDays,
+            is_selected: q.isSelected,
+            quote_status: q.adminStatus,
+          },
+        ])
+      );
+
+      const contractorDetailsMap = await contractorService.enrichContractorDetails(contractorIds);
+
+      const enhancedAssignments: QuoteAssignment[] = assignments.map((assignment) => {
+        const contractorInfo = contractorDetailsMap[assignment.contractorId];
+        const quoteInfo = quotesMap.get(assignment.contractorId);
+
+        return {
+          id: assignment.id,
+          request_id: assignment.requestId,
+          contractor_id: assignment.contractorId,
+          status: assignment.status,
+          assigned_at: assignment.assignedAt,
+          viewed_at: assignment.viewedAt,
+          responded_at: assignment.respondedAt,
+          response_notes: assignment.responseNotes,
+          // Contractor details
+          contractor_company: contractorInfo?.business_name || `Contractor ${assignment.contractorId.slice(-4)}`,
+          contractor_email: contractorInfo?.email || `contractor-${assignment.contractorId.slice(-4)}@rabhan.sa`,
+          contractor_phone: contractorInfo?.phone || null,
+          // Quote details (if submitted)
+          base_price: quoteInfo?.base_price || null,
+          total_user_price: quoteInfo?.total_user_price || null,
+          installation_timeline_days: quoteInfo?.installation_timeline_days || null,
+          is_selected: quoteInfo?.is_selected || null,
+          quote_status: quoteInfo?.quote_status || null,
+        };
+      });
+
+      logger.info('Retrieved quote assignments', {
+        quote_id: quoteId,
+        assignment_count: enhancedAssignments.length,
+      });
+
+      return enhancedAssignments;
+    } catch (error) {
+      logger.error('Failed to get quote assignments', {
+        quote_id: quoteId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      return [];
+    } finally {
+      timer.end({ quote_id: quoteId });
+    }
+  }
+
+  /**
+   * Get contractor quotes for a specific request (for admin)
+   */
+  async getContractorQuotesForRequest(quoteId: string): Promise<AdminContractorQuote[]> {
+    const timer = performanceLogger.startTimer('get_contractor_quotes_for_request');
+
+    try {
+      const contractorQuotes = await prisma.contractorQuote.findMany({
+        where: { requestId: quoteId },
+        include: {
+          quotationLineItems: {
+            orderBy: { lineOrder: 'asc' },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      });
+
+      if (contractorQuotes.length === 0) {
+        logger.info('No contractor quotes found for request', { quote_id: quoteId });
+        return [];
+      }
+
+      const contractorIds = contractorQuotes.map((q) => q.contractorId);
+
+      const contractorDetailsMap = await contractorService.enrichContractorDetails(contractorIds);
+
+      const formattedQuotes: AdminContractorQuote[] = contractorQuotes.map((quote) => {
+        const contractorInfo = contractorDetailsMap[quote.contractorId];
+
+        return {
+          id: quote.id,
+          request_id: quote.requestId,
+          contractor_id: quote.contractorId,
+          contractor_name: contractorInfo?.business_name || `Contractor ${quote.contractorId.slice(-4)}`,
+          contractor_email: contractorInfo?.email || `contractor-${quote.contractorId.slice(-4)}@rabhan.sa`,
+          contractor_phone: contractorInfo?.phone || null,
+          base_price: parseFloat(quote.basePrice?.toString() || '0'),
+          price_per_kwp: parseFloat(quote.pricePerKwp?.toString() || '0'),
+          total_user_price: parseFloat(quote.totalUserPrice?.toString() || quote.basePrice?.toString() || '0'),
+          overprice_amount: parseFloat(quote.overpriceAmount.toString()),
+          system_specs: quote.systemSpecs,
+          installation_timeline_days: quote.installationTimelineDays || 30,
+          warranty_terms: quote.warrantyTerms,
+          maintenance_terms: quote.maintenanceTerms,
+          panels_brand: quote.panelsBrand,
+          panels_model: quote.panelsModel,
+          panels_quantity: quote.panelsQuantity,
+          inverter_brand: quote.inverterBrand,
+          inverter_model: quote.inverterModel,
+          inverter_quantity: quote.inverterQuantity,
+          admin_status: quote.adminStatus,
+          status: quote.status,
+          is_selected: quote.isSelected,
+          selected_at: quote.selectedAt,
+          expires_at: quote.expiresAt,
+          created_at: quote.createdAt,
+          updated_at: quote.updatedAt,
+          // Additional fields from detailed quotation
+          contractor_vat_number: quote.contractorVatNumber,
+          payment_terms: quote.paymentTerms,
+          installation_deadline: quote.installationDeadline,
+          solar_system_capacity_kwp: quote.solarSystemCapacityKwp
+            ? parseFloat(quote.solarSystemCapacityKwp.toString())
+            : null,
+          storage_capacity_kwh: quote.storageCapacityKwh
+            ? parseFloat(quote.storageCapacityKwh.toString())
+            : null,
+          monthly_production_kwh: quote.monthlyProductionKwh
+            ? parseFloat(quote.monthlyProductionKwh.toString())
+            : null,
+          includes_battery: quote.includesBattery,
+          includes_monitoring: quote.includesMonitoring,
+          includes_maintenance: quote.includesMaintenance,
+          // Line items
+          line_items: quote.quotationLineItems.map((item) => ({
+            id: item.id,
+            quotation_id: item.quotationId,
+            item_name: item.itemName,
+            description: item.description,
+            quantity: item.quantity,
+            unit_price: parseFloat(item.unitPrice.toString()),
+            total_price: parseFloat(item.totalPrice?.toString() || '0'),
+            units: item.units,
+            rabhan_commission: parseFloat(item.rabhanCommission.toString()),
+            rabhan_overprice: parseFloat(item.rabhanOverprice.toString()),
+            user_price: parseFloat(item.userPrice.toString()),
+            vendor_net_price: parseFloat(item.vendorNetPrice.toString()),
+            vat: parseFloat(item.vat.toString()),
+            line_order: item.lineOrder,
+            created_at: item.createdAt,
+            updated_at: item.updatedAt,
+          })),
+        };
+      });
+
+      logger.info('Retrieved contractor quotes for request', {
+        quote_id: quoteId,
+        quotes_count: formattedQuotes.length,
+      });
+
+      return formattedQuotes;
+    } catch (error) {
+      logger.error('Failed to get contractor quotes for request', {
+        quote_id: quoteId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      throw handlePrismaError(error);
+    } finally {
+      timer.end({ quote_id: quoteId });
+    }
+  }
+
+  /**
+   * Approve contractor quote (for admin)
+   */
+  async approveQuote(quoteId: string, adminId: string, data: ApproveQuoteDTO): Promise<void> {
+    const timer = performanceLogger.startTimer('approve_quote');
+
+    try {
+      const existingQuote = await prisma.contractorQuote.findUnique({
+        where: { id: quoteId },
+        select: { id: true, contractorId: true, requestId: true, adminStatus: true },
+      });
+
+      if (!existingQuote) {
+        throw new NotFoundError('Contractor quote not found');
+      }
+
+      await prisma.contractorQuote.update({
+        where: { id: quoteId },
+        data: {
+          adminStatus: 'approved',
+          adminNotes: data.admin_notes || '',
+          reviewedBy: adminId,
+          reviewedAt: new Date(),
+        },
+      });
+
+      auditLogger.quote('CONTRACTOR_QUOTE_APPROVED', {
+        admin_id: adminId,
+        quote_id: quoteId,
+        contractor_id: existingQuote.contractorId,
+        request_id: existingQuote.requestId,
+        admin_notes: data.admin_notes,
+      });
+
+      logger.info('Contractor quote approved successfully', {
+        quote_id: quoteId,
+        admin_id: adminId,
+      });
+    } catch (error) {
+      if (error instanceof NotFoundError) {
+        throw error;
+      }
+
+      logger.error('Failed to approve contractor quote', {
+        quote_id: quoteId,
+        admin_id: adminId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      throw handlePrismaError(error);
+    } finally {
+      timer.end({ quote_id: quoteId, admin_id: adminId });
+    }
+  }
+
+  /**
+   * Reject contractor quote (for admin)
+   */
+  async rejectQuote(quoteId: string, adminId: string, data: RejectQuoteDTO): Promise<void> {
+    const timer = performanceLogger.startTimer('reject_quote');
+
+    try {
+      // Check if quote exists
+      const existingQuote = await prisma.contractorQuote.findUnique({
+        where: { id: quoteId },
+        select: { id: true, contractorId: true, requestId: true, adminStatus: true },
+      });
+
+      if (!existingQuote) {
+        throw new NotFoundError('Contractor quote not found');
+      }
+
+      // Update quote to rejected
+      await prisma.contractorQuote.update({
+        where: { id: quoteId },
+        data: {
+          adminStatus: 'rejected',
+          adminNotes: data.admin_notes || '',
+          rejectionReason: data.rejection_reason,
+          reviewedBy: adminId,
+          reviewedAt: new Date(),
+        },
+      });
+
+      auditLogger.quote('CONTRACTOR_QUOTE_REJECTED', {
+        admin_id: adminId,
+        quote_id: quoteId,
+        contractor_id: existingQuote.contractorId,
+        request_id: existingQuote.requestId,
+        rejection_reason: data.rejection_reason,
+        admin_notes: data.admin_notes,
+      });
+
+      logger.info('Contractor quote rejected successfully', {
+        quote_id: quoteId,
+        admin_id: adminId,
+        rejection_reason: data.rejection_reason,
+      });
+    } catch (error) {
+      if (error instanceof NotFoundError) {
+        throw error;
+      }
+
+      logger.error('Failed to reject contractor quote', {
+        quote_id: quoteId,
+        admin_id: adminId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      throw handlePrismaError(error);
+    } finally {
+      timer.end({ quote_id: quoteId, admin_id: adminId });
     }
   }
 }

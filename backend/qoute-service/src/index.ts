@@ -4,6 +4,7 @@ import 'dotenv/config';
 import { logger } from './utils/logger';
 import { errorHandler } from './middleware/errorHandler';
 import quoteRoutes from './routes/quote.routes';
+import businessConfigRoutes from './routes/business-config.routes';
 
 const app = express();
 const port = process.env.PORT || 3006;
@@ -46,6 +47,7 @@ app.get('/health', (req, res) => {
 
 // API Routes
 app.use('/api/quotes', quoteRoutes);
+app.use('/api/business-config', businessConfigRoutes);
 
 // 404 handler
 app.use((req, res) => {

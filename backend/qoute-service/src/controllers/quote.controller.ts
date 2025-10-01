@@ -968,6 +968,87 @@ export class QuoteController {
       timer.end({ contractor_id: req.params.contractor_id });
     }
   });
+
+  /**
+   * @route   DELETE /api/quotes/request/:request_id/contractor
+   * @desc    Remove contractor from quote request
+   * @access  Private (Users only - owner of quote request)
+   */
+  removeContractorFromQuote = asyncHandler(async (req: Request, res: Response) => {
+    const timer = performanceLogger.startTimer('controller_remove_contractor_from_quote');
+
+    try {
+      const userId = validateUserId(req);
+      requireRole(req, ['user']);
+
+      const { request_id } = req.params;
+      const data = req.body;
+
+      const result = await quoteService.removeContractorFromQuote(request_id, data, userId);
+
+      res.json({
+        success: true,
+        message: result.message,
+        data: result,
+      });
+
+      logger.info('Contractor removed from quote request via API', {
+        user_id: userId,
+        quote_request_id: request_id,
+        contractor_id: data.contractor_id,
+      });
+    } catch (error) {
+      logger.error('Remove contractor from quote API error', {
+        user_id: req.headers['x-user-id'],
+        quote_request_id: req.params.request_id,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      throw error;
+    } finally {
+      timer.end({ user_id: req.headers['x-user-id'] as string });
+    }
+  });
+
+  /**
+   * @route   POST /api/quotes/request/:request_id/contractor
+   * @desc    Add contractor to existing quote request
+   * @access  Private (Users only - owner of quote request)
+   */
+  addContractorToQuote = asyncHandler(async (req: Request, res: Response) => {
+    const timer = performanceLogger.startTimer('controller_add_contractor_to_quote');
+
+    try {
+      const userId = validateUserId(req);
+      requireRole(req, ['user']);
+
+      const { request_id } = req.params;
+      const data = req.body;
+
+      const result = await quoteService.addContractorToQuote(request_id, data, userId);
+
+      res.json({
+        success: true,
+        message: result.message,
+        data: result,
+      });
+
+      logger.info('Contractor added to quote request via API', {
+        user_id: userId,
+        quote_request_id: request_id,
+        contractor_id: data.contractor_id,
+        inspection_schedule: data.inspection_schedule,
+      });
+    } catch (error) {
+      logger.error('Add contractor to quote API error', {
+        user_id: req.headers['x-user-id'],
+        quote_request_id: req.params.request_id,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      throw error;
+    } finally {
+      timer.end({ user_id: req.headers['x-user-id'] as string });
+    }
+  });
 }
 
 export const quoteController = new QuoteController();

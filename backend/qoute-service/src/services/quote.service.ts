@@ -42,6 +42,7 @@ import {
   AdminQuoteRequest,
   PaginatedAdminQuotes,
 } from '../types/admin-quotes.types';
+import { RemoveContractorDTO, AddContractorDTO, QuoteContractorOperationResponse } from '../types/quote-contractor.types';
 import { userPrisma } from '../lib/userPrisma';
 import { Prisma } from '@prisma/client';
 
@@ -2116,6 +2117,172 @@ export class QuoteService {
       throw handlePrismaError(error);
     } finally {
       timer.end({ quote_id: quoteId, admin_id: adminId });
+    }
+  }
+
+  /**
+   * Remove contractor from quote request
+   * Removes contractor from selected_contractors array and their inspection schedule
+   */
+  async removeContractorFromQuote(
+    quoteRequestId: string,
+    data: RemoveContractorDTO,
+    userId: string
+  ): Promise<QuoteContractorOperationResponse> {
+    const timer = performanceLogger.startTimer('remove_contractor_from_quote');
+
+    try {
+      const quoteRequest = await prisma.quoteRequest.findUnique({
+        where: { id: quoteRequestId },
+      });
+
+      if (!quoteRequest) {
+        throw new NotFoundError('Quote request not found');
+      }
+
+      if (quoteRequest.userId !== userId) {
+        throw new ValidationError('You can only modify your own quote requests');
+      }
+
+      const contractorIndex = quoteRequest.selectedContractors.indexOf(data.contractor_id);
+      if (contractorIndex === -1) {
+        throw new ValidationError('Contractor is not assigned to this quote request');
+      }
+
+      const updatedContractors = quoteRequest.selectedContractors.filter(
+        (id) => id !== data.contractor_id
+      );
+
+      const inspectionDates = quoteRequest.inspectionDates as any;
+      const updatedInspectionDates = { ...inspectionDates };
+
+      const contractorsClient = (await import('../lib/contractorsClient')).contractorsClient;
+      const contractorSettings = await contractorsClient.$queryRaw<any[]>`
+        SELECT id FROM contractor_availability_settings
+        WHERE contractor_id = ${data.contractor_id}::uuid AND is_active = TRUE
+      `;
+
+      if (contractorSettings.length > 0) {
+        const settingsId = contractorSettings[0].id;
+        delete updatedInspectionDates[settingsId];
+      }
+
+      const updated = await prisma.quoteRequest.update({
+        where: { id: quoteRequestId },
+        data: {
+          selectedContractors: updatedContractors,
+          inspectionDates: updatedInspectionDates,
+        },
+      });
+
+      logger.info('Contractor removed from quote request', {
+        quote_request_id: quoteRequestId,
+        contractor_id: data.contractor_id,
+        user_id: userId,
+      });
+
+      return {
+        quote_request_id: updated.id,
+        selected_contractors: updated.selectedContractors,
+        inspection_dates: updated.inspectionDates,
+        updated_at: updated.updatedAt,
+        message: 'Contractor removed successfully',
+      };
+    } catch (error) {
+      logger.error('Failed to remove contractor from quote', {
+        quote_request_id: quoteRequestId,
+        contractor_id: data.contractor_id,
+        user_id: userId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      throw error;
+    } finally {
+      timer.end({ quote_request_id: quoteRequestId, user_id: userId });
+    }
+  }
+
+  /**
+   * Add contractor to existing quote request
+   * Adds contractor to selected_contractors array and their inspection schedule
+   */
+  async addContractorToQuote(
+    quoteRequestId: string,
+    data: AddContractorDTO,
+    userId: string
+  ): Promise<QuoteContractorOperationResponse> {
+    const timer = performanceLogger.startTimer('add_contractor_to_quote');
+
+    try {
+      const quoteRequest = await prisma.quoteRequest.findUnique({
+        where: { id: quoteRequestId },
+      });
+
+      if (!quoteRequest) {
+        throw new NotFoundError('Quote request not found');
+      }
+
+      if (quoteRequest.userId !== userId) {
+        throw new ValidationError('You can only modify your own quote requests');
+      }
+
+      if (quoteRequest.selectedContractors.includes(data.contractor_id)) {
+        throw new ValidationError('Contractor is already assigned to this quote request');
+      }
+
+      if (quoteRequest.selectedContractors.length >= quoteRequest.maxContractors) {
+        throw new ValidationError(
+          `Maximum ${quoteRequest.maxContractors} contractors allowed per quote request`
+        );
+      }
+
+      const updatedContractors = [...quoteRequest.selectedContractors, data.contractor_id];
+
+      const inspectionDates = quoteRequest.inspectionDates as any;
+      const updatedInspectionDates = { ...inspectionDates };
+
+      const contractorsClient = (await import('../lib/contractorsClient')).contractorsClient;
+      const contractorSettings = await contractorsClient.$queryRaw<any[]>`
+        SELECT id FROM contractor_availability_settings
+        WHERE contractor_id = ${data.contractor_id}::uuid AND is_active = TRUE
+      `;
+
+      if (contractorSettings.length > 0 && data.inspection_schedule) {
+        const settingsId = contractorSettings[0].id;
+        updatedInspectionDates[settingsId] = data.inspection_schedule;
+      }
+
+      const updated = await prisma.quoteRequest.update({
+        where: { id: quoteRequestId },
+        data: {
+          selectedContractors: updatedContractors,
+          inspectionDates: updatedInspectionDates,
+        },
+      });
+
+      logger.info('Contractor added to quote request', {
+        quote_request_id: quoteRequestId,
+        contractor_id: data.contractor_id,
+        user_id: userId,
+        inspection_schedule: data.inspection_schedule,
+      });
+
+      return {
+        quote_request_id: updated.id,
+        selected_contractors: updated.selectedContractors,
+        inspection_dates: updated.inspectionDates,
+        updated_at: updated.updatedAt,
+        message: 'Contractor added successfully',
+      };
+    } catch (error) {
+      logger.error('Failed to add contractor to quote', {
+        quote_request_id: quoteRequestId,
+        contractor_id: data.contractor_id,
+        user_id: userId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      throw error;
+    } finally {
+      timer.end({ quote_request_id: quoteRequestId, user_id: userId });
     }
   }
 }

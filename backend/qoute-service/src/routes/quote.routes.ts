@@ -12,6 +12,7 @@ import { getUserQuoteRequestsSchema } from '../types/user-quote-requests.types';
 import { getContractorQuotesSchema } from '../types/contractor-quotes.types';
 import { getAdminQuotesSchema } from '../types/admin-quotes.types';
 import { approveQuoteSchema, rejectQuoteSchema } from '../types/admin-quote-actions.types';
+import { removeContractorSchema, addContractorSchema } from '../types/quote-contractor.types';
 
 const router = Router();
 
@@ -62,6 +63,27 @@ router.get(
   quoteController.getQuotesForRequest
 );
 
+/**
+ * @route   DELETE /api/quotes/request/:request_id/contractor
+ * @desc    Remove contractor from quote request
+ * @access  Private (Users only - owner of quote request)
+ */
+router.delete(
+  '/request/:request_id/contractor',
+  validateRequest(removeContractorSchema),
+  quoteController.removeContractorFromQuote
+);
+
+/**
+ * @route   POST /api/quotes/request/:request_id/contractor
+ * @desc    Add contractor to existing quote request
+ * @access  Private (Users only - owner of quote request)
+ */
+router.post(
+  '/request/:request_id/contractor',
+  validateRequest(addContractorSchema),
+  quoteController.addContractorToQuote
+);
 
 // ------- CONTRACTORS ROUTES ------
 

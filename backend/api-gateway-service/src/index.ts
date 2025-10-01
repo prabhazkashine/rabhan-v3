@@ -7,6 +7,7 @@ import adminRouter from './routes/adminRoutes';
 import documentRouter from './routes/documentRoutes';
 import productRouter from './routes/productRoutes';
 import qouteRouter from './routes/qouteRoutes';
+import solarCalculatorRouter from './routes/solarCalculatorRoutes';
 
 const app = express();
 const PORT = process.env.API_GATEWAY_PORT || 8000;
@@ -17,7 +18,7 @@ const ADMIN_SERVICE_URL = process.env.ADMIN_SERVICE_URL;
 const USER_SERVICE_URL = process.env.USER_SERVICE_URL;
 
 const conditionalAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
-  if (req.path.startsWith('/api/products/public') || req.path.startsWith('/api/product-categories/public')) {
+  if (req.path.startsWith('/api/products/public') || req.path.startsWith('/api/product-categories/public') || req.path.startsWith('/api/solar/calculate')) {
     return next();
   }
 
@@ -53,6 +54,9 @@ app.use('/api', adminRouter);
 
 app.use('/api', qouteRouter);
 
+app.use('/api', solarCalculatorRouter);
+
+
 
 app.listen(PORT, () => {
   console.log(`✅ API Gateway running on port ${PORT}`);
@@ -64,5 +68,6 @@ app.listen(PORT, () => {
   - /api/products -> Product Service (Authenticated)
   - /api/documents -> Document Service (Authenticated)
   - /api/quotes -> Qoute Service (Authenticated)
+  - /api/solar/calculate -> Solar Calculator Service (No Auth)
   `);
 });

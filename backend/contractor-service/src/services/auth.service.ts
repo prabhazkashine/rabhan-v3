@@ -1,4 +1,4 @@
-import { PrismaClient, AuthProvider, UserStatus, BusinessType, ServiceCategory, ContractorType } from '../generated/prisma';
+import { PrismaClient, AuthProvider, UserStatus, BusinessType, ServiceCategory, ContractorType, SupplierType } from '../generated/prisma';
 import { ContractorRegisterRequest } from '../validation/contractor-schemas';
 import { AuthTokens, JWTUtils } from '../utils/jwt';
 import { PasswordUtils } from '../utils/password';
@@ -74,17 +74,18 @@ export class AuthService {
         await tx.contractorProfile.create({
           data: {
             userId: contractor.id,
-            businessName: data.companyName,
-            businessType: data.userType === 'BUSINESS' ? BusinessType.llc : BusinessType.individual,
+            companyNameEnglish: data.companyName,
+            supplierType: data.userType === 'BUSINESS' ? SupplierType.CONTRACTOR_VENDOR : SupplierType.CONTRACTOR_ONLY,
+            businessType: data.businessType ? BusinessType[data.businessType as keyof typeof BusinessType] : BusinessType.individual,
             email: contractor.email,
             phone: normalizedPhone || contractor.email, // Use email as fallback if no phone
-            addressLine1: 'To be updated', // Placeholder - user will update later
+            addressLine1: 'To be updated',
             city: 'To be updated',
             region: 'To be updated',
             country: 'Saudi Arabia',
             serviceCategories: [ServiceCategory.residential_solar], // Default service
             serviceAreas: ['Riyadh'], // Default area
-            yearsExperience: 1, // Default experience
+            yearsExperience: 1,
             contractorType: ContractorType.full_solar_contractor, // Default type
             canInstall: true,
             canSupplyOnly: false,
@@ -93,8 +94,8 @@ export class AuthService {
             smsNotifications: true,
             marketingConsent: false,
             createdBy: contractor.id,
-            ...(data.crNumber && { commercialRegistration: data.crNumber }),
-            ...(data.vatNumber && { vatNumber: data.vatNumber })
+            ...(data.crNumber && { commercialRegistrationNumber: data.crNumber }),
+            ...(data.vatNumber && { vatRegistrationNumber: data.vatNumber })
           }
         });
 

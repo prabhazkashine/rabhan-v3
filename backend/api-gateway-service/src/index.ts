@@ -8,6 +8,7 @@ import documentRouter from './routes/documentRoutes';
 import productRouter from './routes/productRoutes';
 import qouteRouter from './routes/qouteRoutes';
 import solarCalculatorRouter from './routes/solarCalculatorRoutes';
+import projectsRouter from './routes/projectRoutes';
 
 const app = express();
 const PORT = process.env.API_GATEWAY_PORT || 8000;
@@ -56,6 +57,8 @@ app.use('/api', qouteRouter);
 
 app.use('/api', solarCalculatorRouter);
 
+app.use('/api', projectsRouter);
+
 
 
 app.listen(PORT, () => {
@@ -69,5 +72,6 @@ app.listen(PORT, () => {
   - /api/documents -> Document Service (Authenticated)
   - /api/quotes -> Qoute Service (Authenticated)
   - /api/solar/calculate -> Solar Calculator Service (No Auth)
+  - /api/projects/ -> Projects Service (Authenticated)
   `);
 });

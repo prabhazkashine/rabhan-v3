@@ -124,6 +124,7 @@ model Contractor {
   passwordHash String? @map("password_hash") @db.VarChar(255)
   phone        String? @db.VarChar(20)
   nationalId   String? @unique @map("national_id") @db.VarChar(10)
+  balance      Decimal? @default(0) @db.Decimal(12, 2)
 
   // --- Business Information ---
   companyName  String  @default("To be updated") @map("company_name") @db.VarChar(255)

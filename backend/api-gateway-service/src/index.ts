@@ -9,6 +9,7 @@ import productRouter from './routes/productRoutes';
 import qouteRouter from './routes/qouteRoutes';
 import solarCalculatorRouter from './routes/solarCalculatorRoutes';
 import projectsRouter from './routes/projectRoutes';
+import cors from 'cors';
 
 const app = express();
 const PORT = process.env.API_GATEWAY_PORT || 8000;
@@ -17,6 +18,8 @@ const VENDOR_SERVICE_URL = process.env.VENDOR_SERVICE_URL;
 const PRODUCT_SERVICE_URL = process.env.PRODUCT_SERVICE_URL;
 const ADMIN_SERVICE_URL = process.env.ADMIN_SERVICE_URL;
 const USER_SERVICE_URL = process.env.USER_SERVICE_URL;
+
+app.use(cors());
 
 const conditionalAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
   if (req.path.startsWith('/api/products/public') || req.path.startsWith('/api/product-categories/public') || req.path.startsWith('/api/solar/calculate')) {

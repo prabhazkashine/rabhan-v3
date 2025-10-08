@@ -8,7 +8,7 @@ const winston_1 = __importDefault(require("winston"));
 const logger = winston_1.default.createLogger({
     level: process.env.LOG_LEVEL || 'info',
     format: winston_1.default.format.combine(winston_1.default.format.timestamp(), winston_1.default.format.errors({ stack: true }), winston_1.default.format.json()),
-    defaultMeta: { service: 'user-service' },
+    defaultMeta: { service: 'contractor-service' },
     transports: [
         new winston_1.default.transports.File({
             filename: 'logs/error.log',

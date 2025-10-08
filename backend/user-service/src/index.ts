@@ -2,10 +2,12 @@ import express from 'express';
 import { authRoutes } from './routes/auth.routes';
 import { userProfileRoutes } from './routes/user-profile.routes';
 import { logger } from './utils/logger';
+import cors from 'cors';
 
 const app = express();
 const port = process.env.PORT || 3001;
 
+app.use(cors());
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 

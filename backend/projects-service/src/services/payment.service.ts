@@ -1,4 +1,5 @@
 import prisma from '../lib/prisma';
+import contractorPrisma from '../lib/contractor-prisma';
 import { logger } from '../utils/logger';
 import {
   NotFoundError,
@@ -542,12 +543,20 @@ export class PaymentService {
       throw new BusinessRuleError('Payment has already been released to contractor');
     }
 
+    const contractor = await contractorPrisma.contractor.findUnique({
+      where: { id: project.contractor_id },
+    });
+
+    if (!contractor) {
+      throw new NotFoundError('Contractor not found in contractor database');
+    }
+
     // For BNPL, admin pays full amount to contractor upfront
     // For single_pay, admin releases after user payment
     const amountToRelease = input.amount;
 
     const result = await prisma.$transaction(async (tx) => {
-      await tx.projectPayment.update({
+      const updatedPayment = await tx.projectPayment.update({
         where: { id: project.payment!.id },
         data: {
           admin_paid_contractor: true,
@@ -576,13 +585,56 @@ export class PaymentService {
         },
       });
 
-      return project.payment;
+      return updatedPayment;
     });
+
+    try {
+      const currentContractor = await contractorPrisma.contractor.findUnique({
+        where: { id: project.contractor_id },
+        select: { balance: true },
+      });
+
+      if (!currentContractor) {
+        throw new Error('Contractor not found');
+      }
+
+      const currentBalance = currentContractor.balance
+        ? parseFloat(currentContractor.balance.toString())
+        : 0;
+      const newBalance = currentBalance + amountToRelease;
+
+      await contractorPrisma.contractor.update({
+        where: { id: project.contractor_id },
+        data: {
+          balance: newBalance,
+        },
+      });
+
+      logger.info('Contractor balance updated', {
+        contractorId: project.contractor_id,
+        previousBalance: currentBalance,
+        amountAdded: amountToRelease,
+        newBalance: newBalance,
+        projectId,
+      });
+    } catch (error) {
+      logger.error('Failed to update contractor balance', {
+        error: error instanceof Error ? error.message : 'Unknown error',
+        contractorId: project.contractor_id,
+        projectId,
+        amount: amountToRelease,
+      });
+
+      throw new BusinessRuleError(
+        'Payment recorded but failed to update contractor balance. Please contact support.'
+      );
+    }
 
     logger.info('Payment released to contractor', {
       projectId,
       amount: amountToRelease,
       adminId,
+      contractorId: project.contractor_id,
     });
 
     return result;

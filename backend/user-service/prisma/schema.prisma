@@ -98,6 +98,11 @@ enum ProfileVerificationStatus {
   rejected
 }
 
+enum FlagStatus {
+  RED
+  GREEN
+}
+
 // =============================================
 // MODELS
 // =============================================
@@ -116,6 +121,7 @@ model User {
   status       UserStatus @default(PENDING)
   provider     AuthProvider @default(EMAIL)
   userType     UserType @default(HOMEOWNER) @map("user_type")
+  flagStatus   FlagStatus? @map("flag_status")
 
   // --- Security & Login Fields ---
   emailVerified  Boolean   @default(false) @map("email_verified")

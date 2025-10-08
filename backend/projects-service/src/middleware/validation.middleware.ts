@@ -13,10 +13,10 @@ export const validateBody = (schema: ZodSchema) => {
       next();
     } catch (error) {
       if (error instanceof ZodError) {
-        const errors = error.errors.map((err) => ({
+        const errors = error.errors?.map((err) => ({
           field: err.path.join('.'),
           message: err.message,
-        }));
+        })) || [];
 
         logger.warn('Request body validation failed', {
           path: req.path,
@@ -31,6 +31,7 @@ export const validateBody = (schema: ZodSchema) => {
         return;
       }
 
+      logger.error('Unexpected error in body validation', { error });
       next(error);
     }
   };
@@ -47,10 +48,10 @@ export const validateQuery = (schema: ZodSchema) => {
       next();
     } catch (error) {
       if (error instanceof ZodError) {
-        const errors = error.errors.map((err) => ({
+        const errors = error.errors?.map((err) => ({
           field: err.path.join('.'),
           message: err.message,
-        }));
+        })) || [];
 
         logger.warn('Query parameters validation failed', {
           path: req.path,
@@ -65,6 +66,7 @@ export const validateQuery = (schema: ZodSchema) => {
         return;
       }
 
+      logger.error('Unexpected error in query validation', { error });
       next(error);
     }
   };
@@ -81,10 +83,10 @@ export const validateParams = (schema: ZodSchema) => {
       next();
     } catch (error) {
       if (error instanceof ZodError) {
-        const errors = error.errors.map((err) => ({
+        const errors = error.errors?.map((err) => ({
           field: err.path.join('.'),
           message: err.message,
-        }));
+        })) || [];
 
         logger.warn('Route parameters validation failed', {
           path: req.path,
@@ -99,6 +101,7 @@ export const validateParams = (schema: ZodSchema) => {
         return;
       }
 
+      logger.error('Unexpected error in params validation', { error });
       next(error);
     }
   };

@@ -329,7 +329,7 @@ export class QuoteService {
    */
   async getUserQuoteRequests(
     userId: string,
-    filters: GetUserQuoteRequestsFilters = {}
+    filters: Partial<GetUserQuoteRequestsFilters> = {}
   ): Promise<PaginatedUserQuoteRequests> {
     const timer = performanceLogger.startTimer('get_user_quote_requests');
 
@@ -1150,7 +1150,7 @@ export class QuoteService {
    */
   async getContractorQuotes(
     contractorId: string,
-    filters: GetContractorQuotesFilters = {}
+    filters: Partial<GetContractorQuotesFilters> = {}
   ): Promise<PaginatedContractorQuotes> {
     const timer = performanceLogger.startTimer('get_contractor_quotes');
 
@@ -1316,7 +1316,7 @@ export class QuoteService {
    */
   async getQuotesForRequest(
     requestId: string,
-    filters: GetQuotesForRequestFilters & { userRole?: string } = {}
+    filters: Partial<GetQuotesForRequestFilters> & { userRole?: string } = {}
   ): Promise<EnrichedContractorQuote[]> {
     const timer = performanceLogger.startTimer('get_quotes_for_request');
 
@@ -1343,7 +1343,7 @@ export class QuoteService {
       } else if (sort_by === 'created_at') {
         orderBy.createdAt = sort_order;
       } else {
-        orderBy.basePrice = sort_order; 
+        orderBy.basePrice = sort_order;
       }
 
       const quotes = await prisma.contractorQuote.findMany({
@@ -1455,6 +1455,136 @@ export class QuoteService {
       throw handlePrismaError(error);
     } finally {
       timer.end({ request_id: requestId });
+    }
+  }
+
+  /**
+   * Get a single contractor quote by request ID and contractor ID
+   */
+  async getContractorQuoteByRequestAndContractor(
+    requestId: string,
+    contractorId: string,
+    userRole?: string
+  ): Promise<EnrichedContractorQuote | null> {
+    const timer = performanceLogger.startTimer('get_contractor_quote_by_request_and_contractor');
+
+    try {
+      const where: any = {
+        requestId: requestId,
+        contractorId: contractorId,
+      };
+
+      if (userRole && userRole !== 'admin') {
+        where.adminStatus = 'approved';
+      }
+
+      const quote = await prisma.contractorQuote.findFirst({
+        where,
+        include: {
+          quotationLineItems: {
+            orderBy: {
+              lineOrder: 'asc',
+            },
+          },
+        },
+      });
+
+      if (!quote) {
+        logger.info('No quote found for request and contractor', {
+          request_id: requestId,
+          contractor_id: contractorId,
+        });
+        return null;
+      }
+
+      logger.debug('Fetching contractor info for', { contractor_id: quote.contractorId });
+
+      const contractorInfo = await contractorService.fetchContractorInfo(quote.contractorId);
+
+      logger.debug('Contractor info result', { contractor_info: contractorInfo });
+
+      let daysUntilExpiry: number | undefined = undefined;
+      if (quote.expiresAt) {
+        const now = new Date();
+        const expiry = new Date(quote.expiresAt);
+        daysUntilExpiry = Math.ceil((expiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+      }
+
+      const lineItems: QuoteLineItem[] = quote.quotationLineItems.map((item) => ({
+        id: item.id,
+        quotation_id: item.quotationId,
+        item_name: item.itemName,
+        description: item.description || undefined,
+        quantity: item.quantity,
+        unit_price: parseFloat(item.unitPrice.toString()),
+        total_price: item.totalPrice ? parseFloat(item.totalPrice.toString()) : 0,
+        units: item.units,
+        rabhan_commission: parseFloat(item.rabhanCommission.toString()),
+        rabhan_overprice: parseFloat(item.rabhanOverprice.toString()),
+        user_price: parseFloat(item.userPrice.toString()),
+        vendor_net_price: parseFloat(item.vendorNetPrice.toString()),
+        vat: parseFloat(item.vat.toString()),
+        line_order: item.lineOrder,
+        created_at: item.createdAt,
+        updated_at: item.updatedAt,
+      }));
+
+      const enrichedQuote: EnrichedContractorQuote = {
+        id: quote.id,
+        request_id: quote.requestId!,
+        contractor_id: quote.contractorId,
+        base_price: parseFloat(quote.basePrice?.toString() || '0'),
+        price_per_kwp: parseFloat(quote.pricePerKwp?.toString() || '0'),
+        overprice_amount: parseFloat(quote.overpriceAmount.toString()),
+        total_user_price: parseFloat(quote.totalUserPrice?.toString() || '0'),
+        system_specs: quote.systemSpecs,
+        installation_timeline_days: quote.installationTimelineDays || undefined,
+        warranty_terms: quote.warrantyTerms,
+        maintenance_terms: quote.maintenanceTerms,
+        panels_brand: quote.panelsBrand || undefined,
+        panels_model: quote.panelsModel || undefined,
+        panels_quantity: quote.panelsQuantity || undefined,
+        inverter_brand: quote.inverterBrand || undefined,
+        inverter_model: quote.inverterModel || undefined,
+        inverter_quantity: quote.inverterQuantity || undefined,
+        admin_status: quote.adminStatus,
+        status: quote.status,
+        created_at: quote.createdAt,
+        updated_at: quote.updatedAt,
+        expires_at: quote.expiresAt || undefined,
+        days_until_expiry: daysUntilExpiry,
+        line_items: lineItems.length > 0 ? lineItems : undefined,
+        // Add contractor information if available
+        contractor_name: contractorInfo?.business_name,
+        contractor_company: contractorInfo?.business_name,
+        contractor_email: contractorInfo?.email,
+        contractor_phone: contractorInfo?.phone,
+        contractor_status: contractorInfo?.status,
+        contractor_verification_level: contractorInfo?.verification_level,
+      };
+
+      if (contractorInfo) {
+        logger.debug('Enriched quote with contractor', { contractor_name: contractorInfo.business_name });
+      } else {
+        logger.warn('No contractor info found for quote', { contractor_id: quote.contractorId });
+      }
+
+      logger.info('Quote retrieved and enriched successfully', {
+        request_id: requestId,
+        contractor_id: contractorId,
+        quote_id: quote.id,
+      });
+
+      return enrichedQuote;
+    } catch (error) {
+      logger.error('Failed to get contractor quote by request and contractor', {
+        request_id: requestId,
+        contractor_id: contractorId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      throw handlePrismaError(error);
+    } finally {
+      timer.end({ request_id: requestId, contractor_id: contractorId });
     }
   }
 

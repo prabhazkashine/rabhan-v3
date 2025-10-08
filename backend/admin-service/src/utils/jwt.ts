@@ -17,7 +17,7 @@ export interface AuthTokens {
 class JWTUtils {
   private static readonly ACCESS_TOKEN_SECRET = process.env.JWT_ACCESS_SECRET || 'your-access-secret-key';
   private static readonly REFRESH_TOKEN_SECRET = process.env.JWT_REFRESH_SECRET || 'your-refresh-secret-key';
-  private static readonly ACCESS_TOKEN_EXPIRES_IN = '15m';
+  private static readonly ACCESS_TOKEN_EXPIRES_IN = process.env.ACCESS_TOKEN_EXPIRES_IN || '1d';
   private static readonly REFRESH_TOKEN_EXPIRES_IN = '7d';
 
   static generateTokenPair(userId: string, email: string, role: UserRole, sessionId: string): AuthTokens {
@@ -39,7 +39,7 @@ class JWTUtils {
     return {
       accessToken,
       refreshToken,
-      expiresIn: 900, // 15 minutes in seconds
+      expiresIn: 86400000, // 1d minutes in seconds
     };
   }
 

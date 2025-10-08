@@ -32,10 +32,7 @@ import { z } from 'zod';
 
 const router = Router();
 
-// Use header-based authentication (set by API Gateway)
-// If not using API Gateway, use authenticateToken instead
 const auth = extractUserFromHeaders;
-// const auth = authenticateToken; // Alternative if not using API Gateway
 
 const projectIdSchema = z.object({
   projectId: z.string().uuid('Invalid project ID'),
@@ -144,6 +141,7 @@ router.get(
 router.post(
   '/:projectId/schedule-installation',
   auth,
+  requireRole('contractor'),
   validateParams(projectIdSchema),
   validateBody(scheduleInstallationSchema),
   projectController.scheduleInstallation.bind(projectController)
@@ -153,6 +151,7 @@ router.post(
 router.post(
   '/:projectId/start-installation',
   auth,
+  requireRole('contractor'),
   validateParams(projectIdSchema),
   validateBody(startInstallationSchema),
   projectController.startInstallation.bind(projectController)
@@ -162,6 +161,7 @@ router.post(
 router.post(
   '/:projectId/complete-installation',
   auth,
+  requireRole('contractor'),
   validateParams(projectIdSchema),
   validateBody(completeInstallationSchema),
   projectController.completeInstallation.bind(projectController)

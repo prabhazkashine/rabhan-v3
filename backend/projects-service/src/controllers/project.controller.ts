@@ -11,7 +11,9 @@ export class ProjectController {
 
   async createProject(req: AuthRequest, res: Response) {
     try {
-      const project = await projectService.createProject(req.user!.id, req.body);
+      const authToken = req.headers.authorization;
+
+      const project = await projectService.createProject(req.user!.id, req.body, authToken);
 
       res.status(201).json({
         success: true,

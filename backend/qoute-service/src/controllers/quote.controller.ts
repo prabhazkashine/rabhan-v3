@@ -482,6 +482,67 @@ export class QuoteController {
   });
 
   /**
+   * @route   GET /api/quotes/request/:request_id/contractor/:contractor_id/quote
+   * @desc    Get a single contractor quote by request ID and contractor ID
+   * @access  Private (Users, Admins)
+   */
+  getContractorQuoteByRequestAndContractor = asyncHandler(async (req: Request, res: Response) => {
+    const timer = performanceLogger.startTimer('controller_get_contractor_quote_by_request_and_contractor');
+
+    try {
+      const userId = validateUserId(req);
+      const userRole = req.headers['x-user-role'] as string;
+      const { request_id, contractor_id } = req.params;
+
+      // Non-admin users must own the quote request
+      if (userRole !== 'admin') {
+        await quoteService.getQuoteRequestById(request_id, userId);
+      }
+
+      const quote = await quoteService.getContractorQuoteByRequestAndContractor(
+        request_id,
+        contractor_id,
+        userRole
+      );
+
+      if (!quote) {
+        return res.status(404).json({
+          success: false,
+          message: 'Quote not found for this request and contractor',
+        });
+      }
+
+      res.json({
+        success: true,
+        message: 'Contractor quote retrieved successfully',
+        data: {
+          quote: quote,
+        },
+      });
+
+      logger.info('Contractor quote retrieved via API', {
+        request_id: request_id,
+        contractor_id: contractor_id,
+        user_id: userId,
+        quote_id: quote.id,
+      });
+    } catch (error) {
+      logger.error('Get contractor quote by request and contractor API error', {
+        request_id: req.params.request_id,
+        contractor_id: req.params.contractor_id,
+        user_id: req.headers['x-user-id'],
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      throw error;
+    } finally {
+      timer.end({
+        request_id: req.params.request_id,
+        contractor_id: req.params.contractor_id
+      });
+    }
+  });
+
+  /**
    * @route   GET /api/quotes/contractor/my-quotes
    * @desc    Get contractor's submitted quotes with pagination
    * @access  Private (Contractors only)

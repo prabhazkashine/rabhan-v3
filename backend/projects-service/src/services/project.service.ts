@@ -7,6 +7,7 @@ import {
   ValidationError,
 } from '../utils/errors';
 import { ProjectStatus } from '../generated/prisma';
+import { fetchQuote, calculateSystemSize } from '../utils/quote-client';
 import type {
   CreateProjectInput,
   UpdateProjectInput,
@@ -20,58 +21,52 @@ export class ProjectService {
    */
   async createProject(
     userId: string,
-    input: CreateProjectInput
+    input: CreateProjectInput,
+    authToken?: string
   ) {
     const startTime = Date.now();
 
     logger.info('Creating project', {
       userId,
-      quoteId: input.quote_id,
+      requestId: input.quote_id,
     });
 
-    // Check if project already exists for this quote
+    let quote;
+    try {
+      quote = await fetchQuote(input.quote_id, input.contractor_id, authToken);
+    } catch (error) {
+      logger.error('Failed to fetch quote', { error, requestId: input.quote_id });
+      throw new BusinessRuleError(
+        error instanceof Error ? error.message : 'Failed to fetch quote details'
+      );
+    }
+
     const existingProject = await prisma.project.findUnique({
-      where: { quote_id: input.quote_id },
+      where: { quote_id: quote.id },
     });
 
     if (existingProject) {
       throw new ConflictError('A project already exists for this quote');
     }
 
-    // TODO: Fetch quote details from quote-service to validate
-    // For now, we'll create a mock quote object
-    // In production: const quote = await fetchQuoteFromService(input.quote_id);
-
-    // Mock quote data (replace with actual API call)
-    const mockQuote = {
-      id: input.quote_id,
-      user_id: userId,
-      contractor_id: 'contractor-123', // Should come from quote
-      total_user_price: 50000, // Should come from quote
-      system_size_kwp: 10.5, // Should come from quote
-      status: 'approved', // Must be approved
-    };
-
-    // Validate quote status
-    if (mockQuote.status !== 'approved') {
-      throw new BusinessRuleError('Only approved quotes can be converted to projects');
+    if (quote.admin_status !== 'approved') {
+      throw new BusinessRuleError('Only admin-approved quotes can be converted to projects');
     }
 
-    // Validate user owns the quote
-    if (mockQuote.user_id !== userId) {
-      throw new BusinessRuleError('You can only create projects from your own quotes');
+    const systemSizeKwp = quote.system_specs?.system_size_kwp || calculateSystemSize(quote.line_items);
+
+    if (systemSizeKwp === 0) {
+      logger.warn('Could not determine system size', { quoteId: quote.id });
     }
 
-    // Create project with related records in a transaction
     const project = await prisma.$transaction(async (tx) => {
-      // Create project
       const newProject = await tx.project.create({
         data: {
-          quote_id: input.quote_id,
+          quote_id: quote.id, 
           user_id: userId,
-          contractor_id: mockQuote.contractor_id,
-          total_amount: mockQuote.total_user_price,
-          system_size_kwp: mockQuote.system_size_kwp,
+          contractor_id: quote.contractor_id,
+          total_amount: quote.base_price, 
+          system_size_kwp: systemSizeKwp,
           project_name: input.project_name,
           description: input.description,
           preferred_installation_date: input.preferred_installation_date
@@ -81,7 +76,6 @@ export class ProjectService {
         },
       });
 
-      // Create timeline entry
       await tx.projectTimeline.create({
         data: {
           project_id: newProject.id,
@@ -91,8 +85,9 @@ export class ProjectService {
           created_by_id: userId,
           created_by_role: 'user',
           metadata: {
-            quote_id: input.quote_id,
-            total_amount: mockQuote.total_user_price,
+            quote_id: quote.id,
+            request_id: input.quote_id,
+            total_amount: quote.base_price,
           },
         },
       });
@@ -103,7 +98,8 @@ export class ProjectService {
     logger.info('Project created successfully', {
       projectId: project.id,
       userId,
-      quoteId: input.quote_id,
+      quoteId: quote.id,
+      requestId: input.quote_id,
       duration: Date.now() - startTime,
     });
 
@@ -140,7 +136,6 @@ export class ProjectService {
       throw new NotFoundError('Project not found');
     }
 
-    // Authorization: user can only see their own projects unless admin/contractor
     if (
       userRole.toLowerCase() !== 'admin' &&
       userRole.toLowerCase() !== 'super_admin' &&
@@ -397,7 +392,6 @@ export class ProjectService {
     }
 
     const cancelledProject = await prisma.$transaction(async (tx) => {
-      // Update project
       const updated = await tx.project.update({
         where: { id: projectId },
         data: {

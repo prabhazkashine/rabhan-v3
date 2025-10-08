@@ -34,19 +34,34 @@ export class InstallationService {
       throw new NotFoundError('Project not found');
     }
 
-    // Must have payment completed or in progress
-    if (
-      project.status !== ProjectStatus.payment_completed &&
-      project.status !== ProjectStatus.installation_scheduled
-    ) {
-      throw new BusinessRuleError('Payment must be completed before scheduling installation');
+    if (!project.payment) {
+      throw new BusinessRuleError('No payment record found for this project');
+    }
+
+    // For BNPL: Allow scheduling after downpayment (status: partially_paid or payment_processing)
+    // For Single Payment: Only allow after full payment is completed
+    if (project.payment.payment_method === 'bnpl') {
+      // BNPL: Check if downpayment is received (partially_paid or payment_processing)
+      if (
+        project.payment.payment_status !== 'partially_paid' &&
+        project.payment.payment_status !== 'completed' &&
+        project.status !== ProjectStatus.installation_scheduled
+      ) {
+        throw new BusinessRuleError('Downpayment must be received before scheduling installation for BNPL');
+      }
+    } else {
+      if (
+        project.status !== ProjectStatus.payment_completed &&
+        project.status !== ProjectStatus.installation_scheduled
+      ) {
+        throw new BusinessRuleError('Full payment must be completed before scheduling installation');
+      }
     }
 
     const result = await prisma.$transaction(async (tx) => {
       let installation;
 
       if (project.installation) {
-        // Update existing
         installation = await tx.projectInstallation.update({
           where: { id: project.installation.id },
           data: {
@@ -60,7 +75,6 @@ export class InstallationService {
           },
         });
       } else {
-        // Create new
         installation = await tx.projectInstallation.create({
           data: {
             project_id: projectId,
@@ -75,7 +89,6 @@ export class InstallationService {
         });
       }
 
-      // Update project status
       await tx.project.update({
         where: { id: projectId },
         data: {
@@ -84,7 +97,6 @@ export class InstallationService {
         },
       });
 
-      // Timeline
       await tx.projectTimeline.create({
         data: {
           project_id: projectId,
@@ -213,8 +225,7 @@ export class InstallationService {
     const otp = generateOTP();
     const otpExpiry = getOTPExpiry(10); // 10 minutes
 
-    // TODO: Fetch user phone number from user-service
-    const mockUserPhone = '+966501234567'; // Replace with actual API call
+    const mockUserPhone = '+966501234567';
 
     // Send OTP to user
     const otpSent = await sendOTPViaSMS(mockUserPhone, otp, projectId);
@@ -266,7 +277,7 @@ export class InstallationService {
 
     return {
       ...result,
-      otp_code: undefined, // Don't return OTP to contractor
+      otp_code: undefined, 
       message: 'Installation marked as complete. Verification OTP sent to user.',
     };
   }
@@ -300,19 +311,15 @@ export class InstallationService {
       throw new BusinessRuleError('Installation is not awaiting verification');
     }
 
-    // Check OTP attempts
     if (project.installation.otp_attempts >= project.installation.max_otp_attempts) {
       throw new BusinessRuleError('Maximum OTP verification attempts exceeded');
     }
 
-    // Check if OTP is still valid
     if (!project.installation.otp_expires_at || !isOTPValid(project.installation.otp_expires_at)) {
       throw new BusinessRuleError('OTP has expired. Please request a new one.');
     }
 
-    // Verify OTP
     if (project.installation.otp_code !== input.otp) {
-      // Increment attempts
       await prisma.projectInstallation.update({
         where: { id: project.installation.id },
         data: {
@@ -461,7 +468,6 @@ export class InstallationService {
       throw new NotFoundError('Installation record not found');
     }
 
-    // Remove sensitive OTP data
     return {
       ...installation,
       otp_code: undefined,

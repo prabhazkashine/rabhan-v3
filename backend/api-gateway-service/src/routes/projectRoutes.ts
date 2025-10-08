@@ -43,9 +43,19 @@ const projectsProxy = createProxy(PROJECTS_SERVICE_URL!, {
 });
 
 
+const adminProjectsProxy = createProxy(PROJECTS_SERVICE_URL!, {
+    '^/': '/api/admin/projects/',
+});
+
+
 projectsRouter.use('/projects',
     userAuth,
     projectsProxy
+);
+
+projectsRouter.use('/admin/projects',
+    superAdminAuth,
+    adminProjectsProxy
 );
 
 export default projectsRouter;

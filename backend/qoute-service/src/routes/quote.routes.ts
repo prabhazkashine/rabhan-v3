@@ -64,6 +64,16 @@ router.get(
 );
 
 /**
+ * @route   GET /api/quotes/request/:request_id/contractor/:contractor_id/quote
+ * @desc    Get a single contractor quote by request ID and contractor ID
+ * @access  Private (Users, Admins)
+ */
+router.get(
+  '/request/:request_id/contractor/:contractor_id/quote',
+  quoteController.getContractorQuoteByRequestAndContractor
+);
+
+/**
  * @route   DELETE /api/quotes/request/:request_id/contractor
  * @desc    Remove contractor from quote request
  * @access  Private (Users only - owner of quote request)

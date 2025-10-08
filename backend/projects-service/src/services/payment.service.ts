@@ -64,7 +64,6 @@ export class PaymentService {
 
     const totalAmount = decimalToNumber(project.total_amount);
 
-    // Validate payment selection
     const validation = validatePaymentSelection({
       total_amount: totalAmount,
       payment_method: input.payment_method,
@@ -116,13 +115,11 @@ export class PaymentService {
         },
       });
 
-      // Update project status
       await tx.project.update({
         where: { id: projectId },
         data: { status: ProjectStatus.payment_processing },
       });
 
-      // Add timeline entry
       await tx.projectTimeline.create({
         data: {
           project_id: projectId,
@@ -150,11 +147,9 @@ export class PaymentService {
     downpayment: number,
     numberOfInstallments: number
   ) {
-    // Calculate BNPL schedule
     const schedule = calculateBNPLSchedule(totalAmount, downpayment, numberOfInstallments);
 
     return await prisma.$transaction(async (tx) => {
-      // Create payment record
       const payment = await tx.projectPayment.create({
         data: {
           project_id: projectId,
@@ -170,7 +165,6 @@ export class PaymentService {
         },
       });
 
-      // Create installment schedule
       for (const installment of schedule.installment_schedule) {
         await tx.installmentSchedule.create({
           data: {
@@ -183,13 +177,11 @@ export class PaymentService {
         });
       }
 
-      // Update project status
       await tx.project.update({
         where: { id: projectId },
         data: { status: ProjectStatus.payment_processing },
       });
 
-      // Add timeline entry
       await tx.projectTimeline.create({
         data: {
           project_id: projectId,
@@ -238,16 +230,13 @@ export class PaymentService {
 
     const amount = decimalToNumber(project.payment.total_amount);
 
-    // Process mock payment
     const paymentResult = await processMockPayment(amount, 'single_pay', userId);
 
     if (!paymentResult.success) {
       throw new PaymentError(paymentResult.message);
     }
 
-    // Update payment and project in transaction
     const result = await prisma.$transaction(async (tx) => {
-      // Create transaction record
       await tx.paymentTransaction.create({
         data: {
           payment_id: project.payment!.id,
@@ -258,7 +247,6 @@ export class PaymentService {
         },
       });
 
-      // Update payment
       const updatedPayment = await tx.projectPayment.update({
         where: { id: project.payment!.id },
         data: {
@@ -269,13 +257,11 @@ export class PaymentService {
         },
       });
 
-      // Update project status
       await tx.project.update({
         where: { id: projectId },
         data: { status: ProjectStatus.payment_completed },
       });
 
-      // Add timeline entry
       await tx.projectTimeline.create({
         data: {
           project_id: projectId,

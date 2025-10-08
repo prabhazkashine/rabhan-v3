@@ -4,7 +4,7 @@ import { extractUserFromHeaders, requireRole } from '../middleware/auth.middlewa
 import { validateBody, validateQuery, validateParams } from '../middleware/validation.middleware';
 import { getProjectsQuerySchema } from '../schemas/project.schemas';
 import { releasePaymentToContractorSchema } from '../schemas/payment.schemas';
-import { qualityCheckSchema, moderateReviewSchema, getReviewsQuerySchema } from '../schemas/review.schemas';
+import { moderateReviewSchema, getReviewsQuerySchema } from '../schemas/review.schemas';
 import { z } from 'zod';
 
 const router = Router();
@@ -49,7 +49,7 @@ router.post(
   auth,
   requireRole('admin', 'super_admin'),
   validateParams(projectIdSchema),
-  validateBody(qualityCheckSchema),
+  // validateBody(qualityCheckSchema),
   projectController.performQualityCheck.bind(projectController)
 );
 

@@ -8,6 +8,7 @@ export const createProjectSchema = z.object({
   preferred_installation_date: z.string().datetime().optional(),
   project_name: z.string().min(3).max(200).optional(),
   description: z.string().max(1000).optional(),
+  contractor_id: z.string().uuid('Invalid contractor ID format')
 });
 
 /**

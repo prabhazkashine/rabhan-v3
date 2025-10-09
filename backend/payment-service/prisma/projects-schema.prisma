@@ -1,0 +1,265 @@
+// Projects Database Schema (Read-only access for payment service)
+// This allows payment service to query project data from projects database
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma-projects"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("PROJECT_DATABASE_URL")
+}
+
+// ========================================
+// ENUMS (from projects service)
+// ========================================
+
+enum ProjectStatus {
+  payment_pending
+  payment_processing
+  payment_completed
+  installation_scheduled
+  installation_in_progress
+  installation_completed
+  completed
+  cancelled
+  on_hold
+}
+
+enum PaymentMethod {
+  single_pay
+  bnpl
+}
+
+enum PaymentStatus {
+  pending
+  processing
+  completed
+  failed
+  refunded
+  partially_paid
+}
+
+enum InstallmentStatus {
+  upcoming
+  due
+  paid
+  overdue
+  failed
+  cancelled
+}
+
+enum TimelineEventType {
+  project_created
+  payment_method_selected
+  payment_initiated
+  payment_completed
+  downpayment_received
+  installment_paid
+  installation_scheduled
+  installation_started
+  installation_completed
+  installation_verified
+  review_submitted
+  project_completed
+  project_cancelled
+  admin_action
+  contractor_action
+}
+
+// ========================================
+// PROJECT MODELS (Read-only)
+// ========================================
+
+model Project {
+  id                    String            @id @default(uuid())
+
+  // References to other services
+  quote_id              String            @unique
+  user_id               String
+  contractor_id         String
+
+  // Status tracking
+  status                ProjectStatus     @default(payment_pending)
+
+  // Financial details
+  total_amount          Decimal           @db.Decimal(12, 2)
+  system_size_kwp       Decimal?          @db.Decimal(8, 2)
+
+  // Project metadata
+  project_name          String?
+  description           String?           @db.Text
+  property_address      String?           @db.Text
+
+  // Scheduling
+  preferred_installation_date DateTime?
+  actual_installation_date    DateTime?
+
+  // Timestamps
+  created_at            DateTime          @default(now())
+  updated_at            DateTime          @updatedAt
+  completed_at          DateTime?
+  cancelled_at          DateTime?
+  cancellation_reason   String?           @db.Text
+
+  // Relations
+  payment               ProjectPayment?
+  timeline              ProjectTimeline[]
+
+  @@index([user_id])
+  @@index([contractor_id])
+  @@index([status])
+  @@index([created_at])
+  @@map("projects")
+}
+
+model ProjectPayment {
+  id                    String              @id @default(uuid())
+  project_id            String              @unique
+
+  // Payment method and status
+  payment_method        PaymentMethod
+  payment_status        PaymentStatus       @default(pending)
+
+  // Amounts
+  total_amount          Decimal             @db.Decimal(12, 2)
+  downpayment_amount    Decimal             @default(0) @db.Decimal(12, 2)
+  remaining_amount      Decimal             @default(0) @db.Decimal(12, 2)
+  paid_amount           Decimal             @default(0) @db.Decimal(12, 2)
+
+  // BNPL specific fields
+  number_of_installments Int?
+  monthly_emi           Decimal?            @db.Decimal(12, 2)
+
+  // Mock payment details
+  payment_reference     String?             @unique
+  payment_gateway       String?             @default("mock_gateway")
+
+  // Admin to contractor payment tracking
+  admin_paid_contractor Boolean             @default(false)
+  admin_payment_amount  Decimal?            @db.Decimal(12, 2)
+  admin_paid_at         DateTime?
+  admin_payment_reference String?
+  admin_payment_notes   String?             @db.Text
+
+  // Contractor payment details
+  contractor_bank_name  String?
+  contractor_iban       String?
+  contractor_account_holder String?
+
+  // Timestamps
+  created_at            DateTime            @default(now())
+  updated_at            DateTime            @updatedAt
+  completed_at          DateTime?
+
+  // Relations
+  project               Project             @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  installments          InstallmentSchedule[]
+  transactions          PaymentTransaction[]
+
+  @@index([payment_status])
+  @@index([payment_method])
+  @@map("project_payments")
+}
+
+model InstallmentSchedule {
+  id                    String              @id @default(uuid())
+  payment_id            String
+
+  // Installment details
+  installment_number    Int
+  amount                Decimal             @db.Decimal(12, 2)
+  due_date              DateTime
+  status                InstallmentStatus   @default(upcoming)
+
+  // Payment tracking
+  paid_amount           Decimal             @default(0) @db.Decimal(12, 2)
+  paid_at               DateTime?
+  payment_reference     String?
+  payment_method        String?             @default("mock_payment")
+
+  // Late payment tracking
+  is_overdue            Boolean             @default(false)
+  overdue_days          Int                 @default(0)
+  late_fee              Decimal             @default(0) @db.Decimal(10, 2)
+
+  // Reminders
+  reminder_sent         Boolean             @default(false)
+  reminder_sent_at      DateTime?
+
+  // Timestamps
+  created_at            DateTime            @default(now())
+  updated_at            DateTime            @updatedAt
+
+  // Relations
+  payment               ProjectPayment      @relation(fields: [payment_id], references: [id], onDelete: Cascade)
+
+  @@index([payment_id])
+  @@index([due_date])
+  @@index([status])
+  @@unique([payment_id, installment_number])
+  @@map("installment_schedules")
+}
+
+model PaymentTransaction {
+  id                    String              @id @default(uuid())
+  payment_id            String
+
+  // Transaction details
+  transaction_type      String
+  amount                Decimal             @db.Decimal(12, 2)
+  status                String
+
+  // Mock payment details
+  transaction_reference String              @unique
+  payment_method        String              @default("mock_payment")
+
+  // Related installment (if applicable)
+  installment_id        String?
+
+  // Metadata
+  metadata              Json?
+  failure_reason        String?             @db.Text
+
+  // Timestamps
+  created_at            DateTime            @default(now())
+  processed_at          DateTime?
+
+  // Relations
+  payment               ProjectPayment      @relation(fields: [payment_id], references: [id], onDelete: Cascade)
+
+  @@index([payment_id])
+  @@index([transaction_reference])
+  @@index([created_at])
+  @@map("payment_transactions")
+}
+
+model ProjectTimeline {
+  id                    String              @id @default(uuid())
+  project_id            String
+
+  // Event details
+  event_type            TimelineEventType
+  title                 String
+  description           String              @db.Text
+
+  // Additional metadata
+  metadata              Json?
+
+  // Actor information
+  created_by_id         String?
+  created_by_role       String?
+  created_by_name       String?
+
+  // Timestamp
+  created_at            DateTime            @default(now())
+
+  // Relations
+  project               Project             @relation(fields: [project_id], references: [id], onDelete: Cascade)
+
+  @@index([project_id])
+  @@index([created_at])
+  @@index([event_type])
+  @@map("project_timelines")
+}

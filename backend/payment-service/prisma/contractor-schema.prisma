@@ -1,0 +1,26 @@
+// Contractor Database Schema (Read/Write access for updating contractor balance)
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma-contractor"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("CONTRACTORS_DATABASE_URL")
+}
+
+// Minimal contractor model - just what we need for payment service
+model Contractor {
+  id           String   @id @db.Uuid
+  email        String   @unique @db.VarChar(255)
+  firstName    String?  @map("first_name") @db.VarChar(100)
+  lastName     String?  @map("last_name") @db.VarChar(100)
+  companyName  String   @map("company_name") @db.VarChar(255)
+  balance      Decimal? @default(0) @db.Decimal(12, 2)
+
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  @@map("contractors")
+}

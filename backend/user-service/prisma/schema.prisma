@@ -122,6 +122,7 @@ model User {
   provider     AuthProvider @default(EMAIL)
   userType     UserType @default(HOMEOWNER) @map("user_type")
   flagStatus   FlagStatus? @map("flag_status")
+  samaCreditAmount    Decimal   @default(0) @map("sama_credit_amount") @db.Decimal(10, 2)
 
   // --- Security & Login Fields ---
   emailVerified  Boolean   @default(false) @map("email_verified")

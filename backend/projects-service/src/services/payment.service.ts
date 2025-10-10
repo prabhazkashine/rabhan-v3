@@ -17,6 +17,12 @@ import {
   calculateLateFee,
   decimalToNumber,
 } from '../utils/payment-calculator';
+import {
+  fetchUser,
+  isEligibleForBNPL,
+  checkSamaCreditEligibility,
+  updateUserSamaCredit,
+} from '../utils/user-client';
 import type {
   SelectPaymentMethodInput,
   ProcessDownpaymentInput,
@@ -31,7 +37,8 @@ export class PaymentService {
   async selectPaymentMethod(
     projectId: string,
     userId: string,
-    input: SelectPaymentMethodInput
+    input: SelectPaymentMethodInput,
+    authToken?: string
   ) {
     const startTime = Date.now();
 
@@ -65,6 +72,44 @@ export class PaymentService {
 
     const totalAmount = decimalToNumber(project.total_amount);
 
+    // If BNPL is selected, check user eligibility
+    if (input.payment_method === PaymentMethod.bnpl) {
+      // Fetch user details from user-service
+      const user = await fetchUser(userId, authToken);
+
+      // Check flag status - only GREEN flag users can use BNPL
+      if (!isEligibleForBNPL(user.flagStatus)) {
+        throw new BusinessRuleError(
+          `You are not eligible for Buy Now Pay Later. Your account flag status is ${user.flagStatus || 'not set'}. Only GREEN flag users can use BNPL. Please use single payment option.`
+        );
+      }
+
+      logger.info('User flag status check passed', {
+        userId,
+        flagStatus: user.flagStatus,
+      });
+
+      // Check SAMA credit eligibility
+      const creditCheck = checkSamaCreditEligibility(
+        user.samaCreditAmount,
+        totalAmount,
+        input.downpayment_amount || 0
+      );
+
+      if (!creditCheck.isEligible) {
+        throw new BusinessRuleError(
+          creditCheck.reason || 'Insufficient SAMA credit for BNPL'
+        );
+      }
+
+      logger.info('SAMA credit check passed', {
+        userId,
+        samaCreditAmount: user.samaCreditAmount,
+        projectAmount: totalAmount,
+        downpayment: input.downpayment_amount || 0,
+      });
+    }
+
     const validation = validatePaymentSelection({
       total_amount: totalAmount,
       payment_method: input.payment_method,
@@ -82,12 +127,14 @@ export class PaymentService {
       // Single payment
       payment = await this.createSinglePayment(project.id, totalAmount);
     } else if (input.payment_method === PaymentMethod.bnpl) {
-      // BNPL payment
+      // BNPL payment - deduct SAMA credit and create payment
       payment = await this.createBNPLPayment(
         project.id,
+        userId,
         totalAmount,
         input.downpayment_amount || 0,
-        input.number_of_installments!
+        input.number_of_installments!,
+        authToken
       );
     }
 
@@ -140,15 +187,55 @@ export class PaymentService {
   }
 
   /**
-   * Create BNPL payment record with installment schedule
+   * Create BNPL payment record with installment schedule and deduct SAMA credit
    */
   private async createBNPLPayment(
     projectId: string,
+    userId: string,
     totalAmount: number,
     downpayment: number,
-    numberOfInstallments: number
+    numberOfInstallments: number,
+    authToken?: string
   ) {
     const schedule = calculateBNPLSchedule(totalAmount, downpayment, numberOfInstallments);
+
+    // Fetch user to get current SAMA credit amount
+    const user = await fetchUser(userId, authToken);
+
+    // Calculate actual deduction amount
+    // If user has partial credit, deduct only what they have
+    // The rest is covered by downpayment
+    const samaCreditToDeduct = Math.min(user.samaCreditAmount, totalAmount);
+
+    // Deduct SAMA credit from user account
+    try {
+      await updateUserSamaCredit(
+        userId,
+        samaCreditToDeduct,
+        'deduct',
+        projectId,
+        `BNPL selected for project ${projectId}. Total: ${totalAmount} SAR, SAMA credit used: ${samaCreditToDeduct} SAR, Downpayment: ${downpayment} SAR`,
+        authToken
+      );
+
+      logger.info('SAMA credit deducted successfully', {
+        userId,
+        projectId,
+        totalAmount,
+        samaCreditDeducted: samaCreditToDeduct,
+        downpaymentAmount: downpayment,
+      });
+    } catch (error) {
+      logger.error('Failed to deduct SAMA credit', {
+        userId,
+        projectId,
+        amount: samaCreditToDeduct,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      throw new BusinessRuleError(
+        'Failed to deduct SAMA credit. Please try again or contact support.'
+      );
+    }
 
     return await prisma.$transaction(async (tx) => {
       const payment = await tx.projectPayment.create({

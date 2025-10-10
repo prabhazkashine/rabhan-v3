@@ -1,6 +1,7 @@
 import express from 'express';
 import { authRoutes } from './routes/auth.routes';
 import { userProfileRoutes } from './routes/user-profile.routes';
+import { userRoutes } from './routes/user.routes';
 import { logger } from './utils/logger';
 import cors from 'cors';
 
@@ -21,6 +22,7 @@ app.get('/', (req, res) => {
 
 app.use('/api/auth', authRoutes);
 app.use('/api/user/profile', userProfileRoutes);
+app.use('/api/users', userRoutes);
 
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   logger.error('Unhandled error:', {

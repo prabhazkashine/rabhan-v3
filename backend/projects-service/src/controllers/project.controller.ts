@@ -138,10 +138,13 @@ export class ProjectController {
 
   async selectPaymentMethod(req: AuthRequest, res: Response) {
     try {
+      const authToken = req.headers.authorization;
+
       const payment = await paymentService.selectPaymentMethod(
         req.params.projectId,
         req.user!.id,
-        req.body
+        req.body,
+        authToken
       );
 
       res.status(201).json({

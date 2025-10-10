@@ -14,6 +14,7 @@ import {
   processMockPayment,
   generatePaymentReference,
 } from '../utils/payment-calculator';
+import { updateUserSamaCredit } from '../utils/user-client';
 import type {
   ProcessDownpaymentInput,
   PayInstallmentInput,
@@ -251,6 +252,42 @@ export class PaymentService {
 
       return updatedInstallment;
     });
+
+    // Replenish SAMA credit for BNPL payments
+    // Only the installment amount (not late fees) gets added back to SAMA credit
+    // Note: Downpayments are NOT added back as they were cash, not borrowed from SAMA
+    if (installment.payment.payment_method === 'bnpl') {
+      try {
+        await updateUserSamaCredit(
+          userId,
+          installmentAmount, // Only the base installment amount, not late fees
+          'add',
+          projectId,
+          `Installment #${installment.installment_number} paid for project ${projectId}. Replenishing ${installmentAmount} SAR to SAMA credit.`,
+        );
+
+        logger.info('SAMA credit replenished after installment payment', {
+          userId,
+          projectId,
+          installmentNumber: installment.installment_number,
+          amountReplenished: installmentAmount,
+          lateFeeNotReplenished: lateFee,
+        });
+      } catch (error) {
+        // Log the error but don't fail the payment
+        // The payment was successful, SAMA credit update is a separate concern
+        logger.error('Failed to replenish SAMA credit after installment payment', {
+          error: error instanceof Error ? error.message : 'Unknown error',
+          userId,
+          projectId,
+          installmentId: input.installment_id,
+          amountAttempted: installmentAmount,
+        });
+
+        // You might want to create a retry mechanism or alert admins here
+        // For now, we just log and continue
+      }
+    }
 
     logger.info('Installment paid', {
       projectId,

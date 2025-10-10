@@ -6,6 +6,7 @@ import { errorHandler, notFoundHandler } from './middleware/errorHandler.middlew
 import projectRoutes from './routes/project.routes';
 import contractorRoutes from './routes/contractor.routes';
 import adminRoutes from './routes/admin.routes';
+import internalRoutes from './routes/internal.routes';
 
 const app = express();
 const port = process.env.PORT || 3008;
@@ -48,6 +49,7 @@ app.get('/health', (req, res) => {
 
 // API Routes
 app.use('/api/projects', projectRoutes);
+app.use('/api/internal/projects', internalRoutes); // Internal routes for microservice communication
 app.use('/api/contractor', contractorRoutes);
 app.use('/api/admin', adminRoutes);
 

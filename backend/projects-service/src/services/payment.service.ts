@@ -379,380 +379,142 @@ export class PaymentService {
 
   /**
    * Process downpayment for BNPL
+   * DELEGATED TO PAYMENT SERVICE
    */
   async processDownpayment(
     projectId: string,
     userId: string,
     input: ProcessDownpaymentInput
   ) {
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
-      include: { payment: true },
-    });
+    // Delegate to Payment Service
+    const { processDownpaymentViaPaymentService } = await import('../utils/payment-client');
 
-    if (!project || !project.payment) {
-      throw new NotFoundError('Project or payment not found');
-    }
+    try {
+      const result = await processDownpaymentViaPaymentService(
+        projectId,
+        userId,
+        { amount: input.amount }
+      );
 
-    if (project.user_id !== userId) {
-      throw new BusinessRuleError('Unauthorized');
-    }
-
-    if (project.payment.payment_method !== PaymentMethod.bnpl) {
-      throw new BusinessRuleError('This project is not using BNPL');
-    }
-
-    const expectedDownpayment = decimalToNumber(project.payment.downpayment_amount);
-
-    if (input.amount !== expectedDownpayment) {
-      throw new ValidationError(`Downpayment amount must be ${expectedDownpayment} SAR`);
-    }
-
-    if (decimalToNumber(project.payment.paid_amount) >= expectedDownpayment) {
-      throw new BusinessRuleError('Downpayment has already been paid');
-    }
-
-    // Process mock payment
-    const paymentResult = await processMockPayment(input.amount, 'downpayment', userId);
-
-    if (!paymentResult.success) {
-      throw new PaymentError(paymentResult.message);
-    }
-
-    const result = await prisma.$transaction(async (tx) => {
-      await tx.paymentTransaction.create({
-        data: {
-          payment_id: project.payment!.id,
-          transaction_type: 'downpayment',
-          amount: input.amount,
-          status: 'success',
-          transaction_reference: paymentResult.reference,
-        },
+      logger.info('Downpayment processed via payment service', {
+        projectId,
+        amount: input.amount,
       });
 
-      const updatedPayment = await tx.projectPayment.update({
-        where: { id: project.payment!.id },
-        data: {
-          paid_amount: { increment: input.amount },
-          remaining_amount: { decrement: input.amount },
-          payment_status: PaymentStatus.partially_paid,
-        },
+      return result.data;
+    } catch (error) {
+      logger.error('Failed to process downpayment via payment service', {
+        projectId,
+        userId,
+        error: error instanceof Error ? error.message : 'Unknown error',
       });
-
-      await tx.projectTimeline.create({
-        data: {
-          project_id: projectId,
-          event_type: 'downpayment_received',
-          title: 'Downpayment Received',
-          description: `Downpayment of ${input.amount} SAR received`,
-          created_by_id: userId,
-          created_by_role: 'user',
-          metadata: {
-            amount: input.amount,
-            transaction_reference: paymentResult.reference,
-          },
-        },
-      });
-
-      return updatedPayment;
-    });
-
-    logger.info('Downpayment processed', {
-      projectId,
-      amount: input.amount,
-      reference: paymentResult.reference,
-    });
-
-    return result;
+      throw error;
+    }
   }
 
   /**
    * Pay monthly installment
+   * DELEGATED TO PAYMENT SERVICE
    */
   async payInstallment(
     projectId: string,
     userId: string,
     input: PayInstallmentInput
   ) {
-    // Get installment
-    const installment = await prisma.installmentSchedule.findUnique({
-      where: { id: input.installment_id },
-      include: {
-        payment: {
-          include: { project: true },
-        },
-      },
-    });
+    // Delegate to Payment Service
+    const { payInstallmentViaPaymentService } = await import('../utils/payment-client');
 
-    if (!installment) {
-      throw new NotFoundError('Installment not found');
-    }
-
-    if (installment.payment.project.user_id !== userId) {
-      throw new BusinessRuleError('Unauthorized');
-    }
-
-    if (installment.status === InstallmentStatus.paid) {
-      throw new BusinessRuleError('Installment has already been paid');
-    }
-
-    const installmentAmount = decimalToNumber(installment.amount);
-
-    // Check for late fees
-    const overdueDays = calculateOverdueDays(installment.due_date);
-    const lateFee = calculateLateFee(installmentAmount, overdueDays);
-    const totalAmount = installmentAmount + lateFee;
-
-    if (input.amount < totalAmount) {
-      throw new ValidationError(`Payment amount must be at least ${totalAmount} SAR (including late fee of ${lateFee} SAR)`);
-    }
-
-    // Process payment
-    const paymentResult = await processMockPayment(input.amount, 'installment', userId);
-
-    if (!paymentResult.success) {
-      throw new PaymentError(paymentResult.message);
-    }
-
-    const result = await prisma.$transaction(async (tx) => {
-      // Update installment
-      const updatedInstallment = await tx.installmentSchedule.update({
-        where: { id: input.installment_id },
-        data: {
-          status: InstallmentStatus.paid,
-          paid_amount: input.amount,
-          paid_at: new Date(),
-          payment_reference: paymentResult.reference,
-          is_overdue: overdueDays > 0,
-          overdue_days: overdueDays,
-          late_fee: lateFee,
-        },
-      });
-
-      // Create transaction
-      await tx.paymentTransaction.create({
-        data: {
-          payment_id: installment.payment_id,
-          transaction_type: 'installment',
-          amount: input.amount,
-          status: 'success',
-          transaction_reference: paymentResult.reference,
+    try {
+      const result = await payInstallmentViaPaymentService(
+        projectId,
+        userId,
+        {
           installment_id: input.installment_id,
-          metadata: {
-            installment_number: installment.installment_number,
-            late_fee: lateFee,
-            overdue_days: overdueDays,
-          },
-        },
+          amount: input.amount,
+        }
+      );
+
+      logger.info('Installment paid via payment service', {
+        projectId,
+        installmentId: input.installment_id,
+        amount: input.amount,
       });
 
-      // Update payment
-      const updatedPayment = await tx.projectPayment.update({
-        where: { id: installment.payment_id },
-        data: {
-          paid_amount: { increment: input.amount },
-          remaining_amount: { decrement: installmentAmount },
-        },
+      return result.data;
+    } catch (error) {
+      logger.error('Failed to pay installment via payment service', {
+        projectId,
+        userId,
+        error: error instanceof Error ? error.message : 'Unknown error',
       });
-
-      // Check if all installments are paid
-      const unpaidCount = await tx.installmentSchedule.count({
-        where: {
-          payment_id: installment.payment_id,
-          status: { not: InstallmentStatus.paid },
-        },
-      });
-
-      if (unpaidCount === 0) {
-        await tx.projectPayment.update({
-          where: { id: installment.payment_id },
-          data: {
-            payment_status: PaymentStatus.completed,
-            completed_at: new Date(),
-          },
-        });
-
-        await tx.project.update({
-          where: { id: projectId },
-          data: { status: ProjectStatus.payment_completed },
-        });
-      }
-
-      // Timeline entry
-      await tx.projectTimeline.create({
-        data: {
-          project_id: projectId,
-          event_type: 'installment_paid',
-          title: `Installment ${installment.installment_number} Paid`,
-          description: `Monthly installment of ${input.amount} SAR paid`,
-          created_by_id: userId,
-          created_by_role: 'user',
-          metadata: {
-            installment_number: installment.installment_number,
-            amount: input.amount,
-            late_fee: lateFee,
-            transaction_reference: paymentResult.reference,
-          },
-        },
-      });
-
-      return updatedInstallment;
-    });
-
-    logger.info('Installment paid', {
-      projectId,
-      installmentId: input.installment_id,
-      amount: input.amount,
-      lateFee,
-    });
-
-    return result;
+      throw error;
+    }
   }
 
   /**
    * Admin releases payment to contractor
+   * DELEGATED TO PAYMENT SERVICE
    */
   async releasePaymentToContractor(
     projectId: string,
     adminId: string,
     input: ReleasePaymentToContractorInput
   ) {
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
-      include: { payment: true },
-    });
-
-    if (!project || !project.payment) {
-      throw new NotFoundError('Project or payment not found');
-    }
-
-    if (project.payment.admin_paid_contractor) {
-      throw new BusinessRuleError('Payment has already been released to contractor');
-    }
-
-    const contractor = await contractorPrisma.contractor.findUnique({
-      where: { id: project.contractor_id },
-    });
-
-    if (!contractor) {
-      throw new NotFoundError('Contractor not found in contractor database');
-    }
-
-    // For BNPL, admin pays full amount to contractor upfront
-    // For single_pay, admin releases after user payment
-    const amountToRelease = input.amount;
-
-    const result = await prisma.$transaction(async (tx) => {
-      const updatedPayment = await tx.projectPayment.update({
-        where: { id: project.payment!.id },
-        data: {
-          admin_paid_contractor: true,
-          admin_payment_amount: amountToRelease,
-          admin_paid_at: new Date(),
-          admin_payment_reference: input.payment_reference || generatePaymentReference('ADM'),
-          admin_payment_notes: input.notes,
-          contractor_bank_name: input.contractor_bank_name,
-          contractor_iban: input.contractor_iban,
-          contractor_account_holder: input.contractor_account_holder,
-        },
-      });
-
-      await tx.projectTimeline.create({
-        data: {
-          project_id: projectId,
-          event_type: 'admin_action',
-          title: 'Payment Released to Contractor',
-          description: `Admin released ${amountToRelease} SAR to contractor`,
-          created_by_id: adminId,
-          created_by_role: 'admin',
-          metadata: {
-            amount: amountToRelease,
-            reference: input.payment_reference,
-          },
-        },
-      });
-
-      return updatedPayment;
-    });
+    // Delegate to Payment Service
+    const { releasePaymentViaPaymentService } = await import('../utils/payment-client');
 
     try {
-      const currentContractor = await contractorPrisma.contractor.findUnique({
-        where: { id: project.contractor_id },
-        select: { balance: true },
-      });
-
-      if (!currentContractor) {
-        throw new Error('Contractor not found');
-      }
-
-      const currentBalance = currentContractor.balance
-        ? parseFloat(currentContractor.balance.toString())
-        : 0;
-      const newBalance = currentBalance + amountToRelease;
-
-      await contractorPrisma.contractor.update({
-        where: { id: project.contractor_id },
-        data: {
-          balance: newBalance,
-        },
-      });
-
-      logger.info('Contractor balance updated', {
-        contractorId: project.contractor_id,
-        previousBalance: currentBalance,
-        amountAdded: amountToRelease,
-        newBalance: newBalance,
+      const result = await releasePaymentViaPaymentService(
         projectId,
-      });
-    } catch (error) {
-      logger.error('Failed to update contractor balance', {
-        error: error instanceof Error ? error.message : 'Unknown error',
-        contractorId: project.contractor_id,
-        projectId,
-        amount: amountToRelease,
-      });
-
-      throw new BusinessRuleError(
-        'Payment recorded but failed to update contractor balance. Please contact support.'
+        adminId,
+        input
       );
+
+      logger.info('Payment released to contractor via payment service', {
+        projectId,
+        amount: input.amount,
+        adminId,
+      });
+
+      return result.data;
+    } catch (error) {
+      logger.error('Failed to release payment via payment service', {
+        projectId,
+        adminId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      throw error;
     }
-
-    logger.info('Payment released to contractor', {
-      projectId,
-      amount: amountToRelease,
-      adminId,
-      contractorId: project.contractor_id,
-    });
-
-    return result;
   }
 
   /**
    * Get installment schedule
+   * DELEGATED TO PAYMENT SERVICE
    */
   async getInstallmentSchedule(projectId: string, userId: string) {
-    const project = await prisma.project.findUnique({
-      where: { id: projectId },
-      include: {
-        payment: {
-          include: {
-            installments: {
-              orderBy: { installment_number: 'asc' },
-            },
-          },
-        },
-      },
-    });
+    // Delegate to Payment Service
+    const { getInstallmentScheduleViaPaymentService } = await import('../utils/payment-client');
 
-    if (!project) {
-      throw new NotFoundError('Project not found');
+    try {
+      const result = await getInstallmentScheduleViaPaymentService(
+        projectId,
+        userId
+      );
+
+      logger.info('Installment schedule fetched via payment service', {
+        projectId,
+        userId,
+      });
+
+      return result.data;
+    } catch (error) {
+      logger.error('Failed to get installment schedule via payment service', {
+        projectId,
+        userId,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+      throw error;
     }
-
-    if (project.user_id !== userId) {
-      throw new BusinessRuleError('Unauthorized');
-    }
-
-    return project.payment?.installments || [];
   }
 }
 

@@ -1,5 +1,6 @@
-import projectsPrisma from '../lib/projects-prisma';
+import prisma from '../lib/prisma'; // Use payment service's own database
 import contractorPrisma from '../lib/contractor-prisma';
+import axios from 'axios';
 import { logger } from '../utils/logger';
 import {
   NotFoundError,
@@ -13,15 +14,363 @@ import {
   decimalToNumber,
   processMockPayment,
   generatePaymentReference,
+  calculateBNPLSchedule,
+  validatePaymentSelection,
 } from '../utils/payment-calculator';
-import { updateUserSamaCredit } from '../utils/user-client';
+import {
+  updateUserSamaCredit,
+  fetchUser,
+  isEligibleForBNPL,
+  checkSamaCreditEligibility
+} from '../utils/user-client';
 import type {
+  SelectPaymentMethodInput,
   ProcessDownpaymentInput,
   PayInstallmentInput,
   ReleasePaymentToContractorInput,
 } from '../schemas/payment.schemas';
 
+const PROJECTS_SERVICE_URL = process.env.PROJECTS_SERVICE_URL || 'http://localhost:3008';
+
+/**
+ * Helper to get project details from Projects Service
+ */
+async function getProjectFromProjectsService(projectId: string): Promise<{
+  id: string;
+  user_id: string;
+  contractor_id: string;
+  status: string;
+  total_amount?: number;
+}> {
+  try {
+    const response = await axios.get<{
+      success: boolean;
+      data: {
+        id: string;
+        user_id: string;
+        contractor_id: string;
+        status: string;
+        total_amount?: number;
+      };
+    }>(`${PROJECTS_SERVICE_URL}/api/internal/projects/${projectId}/info`, {
+      timeout: 5000,
+    });
+
+    console.log(response, 'responseresponseresponse')
+
+    if (!response.data.success) {
+      throw new Error('Failed to fetch project details');
+    }
+
+    return response.data.data;
+  } catch (error) {
+    console.log(error, 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee')
+    logger.error('Failed to fetch project from projects service', {
+      projectId,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+    throw new BusinessRuleError('Unable to verify project details. Please try again.');
+  }
+}
+
+/**
+ * Helper to update project status in Projects Service
+ */
+async function updateProjectStatus(projectId: string, status: string): Promise<void> {
+  try {
+    await axios.patch(
+      `${PROJECTS_SERVICE_URL}/api/internal/projects/${projectId}/status`,
+      { status },
+      { timeout: 5000 }
+    );
+  } catch (error) {
+    logger.error('Failed to update project status', {
+      projectId,
+      status,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+    // Don't throw - payment succeeded, status update is secondary
+  }
+}
+
+/**
+ * Helper to add timeline event in Projects Service
+ */
+async function addProjectTimeline(
+  projectId: string,
+  event: {
+    event_type: string;
+    title: string;
+    description: string;
+    created_by_id?: string;
+    created_by_role?: string;
+    metadata?: any;
+  }
+): Promise<void> {
+  try {
+    await axios.post(
+      `${PROJECTS_SERVICE_URL}/api/internal/projects/${projectId}/timeline`,
+      event,
+      { timeout: 5000 }
+    );
+  } catch (error) {
+    logger.error('Failed to add project timeline', {
+      projectId,
+      error: error instanceof Error ? error.message : 'Unknown error',
+    });
+    // Don't throw - timeline is secondary
+  }
+}
+
 export class PaymentService {
+  /**
+   * Select payment method (Single Pay or BNPL)
+   * Creates payment record in Payment Service database
+   */
+  async selectPaymentMethod(
+    projectId: string,
+    userId: string,
+    totalAmount: number | undefined,
+    input: SelectPaymentMethodInput,
+    authToken?: string
+  ) {
+    const startTime = Date.now();
+
+    logger.info('Selecting payment method', {
+      projectId,
+      userId,
+      paymentMethod: input.payment_method,
+    });
+
+    // Get project details from projects service
+    const project = await getProjectFromProjectsService(projectId);
+
+    if (!project) {
+      throw new NotFoundError('Project not found');
+    }
+
+    if (project.user_id !== userId) {
+      throw new BusinessRuleError('You can only configure payment for your own projects');
+    }
+
+    console.log(project, 'pppppppppppppppppppppppppp')
+
+    // Auto-fetch total_amount from project if not provided
+    const finalTotalAmount = totalAmount ?? project.total_amount;
+
+    if (!finalTotalAmount || finalTotalAmount <= 0) {
+      throw new ValidationError(
+        'Total amount could not be determined. Please ensure the project has a valid cost or provide total_amount in the request.'
+      );
+    }
+
+    logger.info('Total amount determined', {
+      projectId,
+      providedAmount: totalAmount,
+      projectCost: project.total_amount,
+      finalAmount: finalTotalAmount,
+      source: totalAmount ? 'request' : 'project',
+    });
+
+    // Check if payment already exists
+    const existingPayment = await prisma.projectPayment.findUnique({
+      where: { project_id: projectId },
+    });
+
+    if (existingPayment) {
+      throw new BusinessRuleError('Payment method has already been selected');
+    }
+
+    // Validate payment selection
+    const validation = validatePaymentSelection({
+      total_amount: finalTotalAmount,
+      payment_method: input.payment_method,
+      downpayment_amount: input.downpayment_amount,
+      number_of_installments: input.number_of_installments,
+    });
+
+    if (!validation.isValid) {
+      throw new ValidationError(validation.errors.join(', '));
+    }
+
+    // Additional BNPL-specific validations
+    if (input.payment_method === 'bnpl') {
+      // Fetch user details to check BNPL eligibility
+      const user = await fetchUser(userId, authToken);
+
+      // Check if user's flag status allows BNPL
+      if (!isEligibleForBNPL(user.flagStatus)) {
+        throw new BusinessRuleError(
+          'You are not eligible for Buy Now Pay Later. Your account flag status does not permit BNPL purchases. Please use the single payment option or contact support for more information.'
+        );
+      }
+
+      // Check SAMA credit eligibility
+      const creditCheck = checkSamaCreditEligibility(
+        user.samaCreditAmount,
+        finalTotalAmount,
+        input.downpayment_amount || 0
+      );
+
+      if (!creditCheck.isEligible) {
+        throw new BusinessRuleError(creditCheck.reason || 'Insufficient SAMA credit for BNPL');
+      }
+
+      // Deduct SAMA credit for BNPL
+      const amountToDeduct = Math.min(user.samaCreditAmount, finalTotalAmount - (input.downpayment_amount || 0));
+
+      if (amountToDeduct > 0) {
+        try {
+          await updateUserSamaCredit(
+            userId,
+            amountToDeduct,
+            'deduct',
+            projectId,
+            `SAMA credit deducted for BNPL payment on project ${projectId}. Amount: ${amountToDeduct} SAR.`,
+            authToken
+          );
+
+          logger.info('SAMA credit deducted for BNPL', {
+            userId,
+            projectId,
+            amountDeducted: amountToDeduct,
+            previousAmount: user.samaCreditAmount,
+            newAmount: user.samaCreditAmount - amountToDeduct,
+          });
+        } catch (error) {
+          logger.error('Failed to deduct SAMA credit for BNPL', {
+            error: error instanceof Error ? error.message : 'Unknown error',
+            userId,
+            projectId,
+            amountAttempted: amountToDeduct,
+          });
+          throw new BusinessRuleError(
+            'Failed to process SAMA credit deduction. Please try again or contact support.'
+          );
+        }
+      }
+    }
+
+    let payment;
+
+    if (input.payment_method === 'single_pay') {
+      // Single payment
+      payment = await this.createSinglePayment(projectId, finalTotalAmount);
+    } else if (input.payment_method === 'bnpl') {
+      // BNPL payment - create payment with installment schedule
+      payment = await this.createBNPLPayment(
+        projectId,
+        finalTotalAmount,
+        input.downpayment_amount || 0,
+        input.number_of_installments!
+      );
+    }
+
+    // Update project status to payment_processing
+    await updateProjectStatus(projectId, 'payment_processing');
+
+    // Add timeline event
+    await addProjectTimeline(projectId, {
+      event_type: 'payment_method_selected',
+      title: input.payment_method === 'bnpl' ? 'BNPL Payment Selected' : 'Single Payment Selected',
+      description: input.payment_method === 'bnpl'
+        ? `User selected Buy Now Pay Later with ${input.number_of_installments} monthly installments`
+        : 'User selected to pay the full amount in one payment',
+      created_by_id: userId,
+      created_by_role: 'user',
+      metadata: {
+        payment_method: input.payment_method,
+        total_amount: finalTotalAmount,
+        ...(input.payment_method === 'bnpl' && {
+          downpayment: input.downpayment_amount,
+          number_of_installments: input.number_of_installments,
+        }),
+      },
+    });
+
+    logger.info('Payment method selected', {
+      projectId,
+      paymentMethod: input.payment_method,
+      duration: Date.now() - startTime,
+    });
+
+    return payment;
+  }
+
+  /**
+   * Create single payment record
+   */
+  private async createSinglePayment(projectId: string, totalAmount: number) {
+    const payment = await prisma.projectPayment.create({
+      data: {
+        project_id: projectId,
+        payment_method: 'single_pay',
+        payment_status: 'pending',
+        total_amount: totalAmount,
+        remaining_amount: totalAmount,
+        payment_reference: generatePaymentReference('SPY'),
+      },
+    });
+
+    logger.info('Single payment record created in Payment DB', {
+      projectId,
+      paymentId: payment.id,
+    });
+
+    return payment;
+  }
+
+  /**
+   * Create BNPL payment record with installment schedule
+   */
+  private async createBNPLPayment(
+    projectId: string,
+    totalAmount: number,
+    downpayment: number,
+    numberOfInstallments: number
+  ) {
+    const schedule = calculateBNPLSchedule(totalAmount, downpayment, numberOfInstallments);
+
+    return await prisma.$transaction(async (tx) => {
+      const payment = await tx.projectPayment.create({
+        data: {
+          project_id: projectId,
+          payment_method: 'bnpl',
+          payment_status: downpayment > 0 ? 'pending' : 'partially_paid',
+          total_amount: totalAmount,
+          downpayment_amount: downpayment,
+          remaining_amount: schedule.remaining_amount,
+          paid_amount: 0,
+          number_of_installments: numberOfInstallments,
+          monthly_emi: schedule.monthly_emi,
+          payment_reference: generatePaymentReference('BNPL'),
+        },
+      });
+
+      // Create installment schedule
+      for (const installment of schedule.installment_schedule) {
+        await tx.installmentSchedule.create({
+          data: {
+            payment_id: payment.id,
+            installment_number: installment.installment_number,
+            amount: installment.amount,
+            due_date: installment.due_date,
+            status: 'upcoming',
+          },
+        });
+      }
+
+      logger.info('BNPL payment record created in Payment DB', {
+        projectId,
+        paymentId: payment.id,
+        numberOfInstallments,
+        downpayment,
+      });
+
+      return payment;
+    });
+  }
+
   /**
    * Process downpayment for BNPL
    */
@@ -30,31 +379,37 @@ export class PaymentService {
     userId: string,
     input: ProcessDownpaymentInput
   ) {
-    // Get project from projects database
-    const project = await projectsPrisma.project.findUnique({
-      where: { id: projectId },
-      include: { payment: true },
-    });
+    // Get project details from projects service
+    const project = await getProjectFromProjectsService(projectId);
 
-    if (!project || !project.payment) {
-      throw new NotFoundError('Project or payment not found');
+    if (!project) {
+      throw new NotFoundError('Project not found');
     }
 
     if (project.user_id !== userId) {
       throw new BusinessRuleError('Unauthorized');
     }
 
-    if (project.payment.payment_method !== 'bnpl') {
+    // Get payment from payment service database
+    const payment = await prisma.projectPayment.findUnique({
+      where: { project_id: projectId },
+    });
+
+    if (!payment) {
+      throw new NotFoundError('Payment record not found');
+    }
+
+    if (payment.payment_method !== 'bnpl') {
       throw new BusinessRuleError('This project is not using BNPL');
     }
 
-    const expectedDownpayment = decimalToNumber(project.payment.downpayment_amount);
+    const expectedDownpayment = decimalToNumber(payment.downpayment_amount);
 
     if (input.amount !== expectedDownpayment) {
       throw new ValidationError(`Downpayment amount must be ${expectedDownpayment} SAR`);
     }
 
-    if (decimalToNumber(project.payment.paid_amount) >= expectedDownpayment) {
+    if (decimalToNumber(payment.paid_amount) >= expectedDownpayment) {
       throw new BusinessRuleError('Downpayment has already been paid');
     }
 
@@ -65,12 +420,12 @@ export class PaymentService {
       throw new PaymentError(paymentResult.message);
     }
 
-    // Update projects database
-    const result = await projectsPrisma.$transaction(async (tx) => {
+    // Update payment service database
+    const result = await prisma.$transaction(async (tx) => {
       // Create transaction record
-      await tx.paymentTransaction.create({
+      await tx.projectPaymentTransaction.create({
         data: {
-          payment_id: project.payment!.id,
+          payment_id: payment.id,
           transaction_type: 'downpayment',
           amount: input.amount,
           status: 'success',
@@ -80,7 +435,7 @@ export class PaymentService {
 
       // Update payment record
       const updatedPayment = await tx.projectPayment.update({
-        where: { id: project.payment!.id },
+        where: { id: payment.id },
         data: {
           paid_amount: { increment: input.amount },
           remaining_amount: { decrement: input.amount },
@@ -88,23 +443,20 @@ export class PaymentService {
         },
       });
 
-      // Add timeline entry
-      await tx.projectTimeline.create({
-        data: {
-          project_id: projectId,
-          event_type: 'downpayment_received',
-          title: 'Downpayment Received',
-          description: `Downpayment of ${input.amount} SAR received`,
-          created_by_id: userId,
-          created_by_role: 'user',
-          metadata: {
-            amount: input.amount,
-            transaction_reference: paymentResult.reference,
-          },
-        },
-      });
-
       return updatedPayment;
+    });
+
+    // Add timeline entry in projects service
+    await addProjectTimeline(projectId, {
+      event_type: 'downpayment_received',
+      title: 'Downpayment Received',
+      description: `Downpayment of ${input.amount} SAR received`,
+      created_by_id: userId,
+      created_by_role: 'user',
+      metadata: {
+        amount: input.amount,
+        transaction_reference: paymentResult.reference,
+      },
     });
 
     logger.info('Downpayment processed', {
@@ -124,8 +476,8 @@ export class PaymentService {
     userId: string,
     input: PayInstallmentInput
   ) {
-    // Get installment from projects database
-    const installment = await projectsPrisma.installmentSchedule.findUnique({
+    // Get installment from payment service database
+    const installment = await prisma.installmentSchedule.findUnique({
       where: { id: input.installment_id },
       include: {
         payment: true,
@@ -136,10 +488,8 @@ export class PaymentService {
       throw new NotFoundError('Installment not found');
     }
 
-    // Get project to verify ownership
-    const project = await projectsPrisma.project.findUnique({
-      where: { id: projectId },
-    });
+    // Verify project ownership
+    const project = await getProjectFromProjectsService(projectId);
 
     if (!project || project.user_id !== userId) {
       throw new BusinessRuleError('Unauthorized');
@@ -157,7 +507,9 @@ export class PaymentService {
     const totalAmount = installmentAmount + lateFee;
 
     if (input.amount < totalAmount) {
-      throw new ValidationError(`Payment amount must be at least ${totalAmount} SAR (including late fee of ${lateFee} SAR)`);
+      throw new ValidationError(
+        `Payment amount must be at least ${totalAmount} SAR (including late fee of ${lateFee} SAR)`
+      );
     }
 
     // Process payment
@@ -167,8 +519,8 @@ export class PaymentService {
       throw new PaymentError(paymentResult.message);
     }
 
-    // Update projects database
-    const result = await projectsPrisma.$transaction(async (tx) => {
+    // Update payment service database
+    const result = await prisma.$transaction(async (tx) => {
       // Update installment
       const updatedInstallment = await tx.installmentSchedule.update({
         where: { id: input.installment_id },
@@ -184,7 +536,7 @@ export class PaymentService {
       });
 
       // Create transaction
-      await tx.paymentTransaction.create({
+      await tx.projectPaymentTransaction.create({
         data: {
           payment_id: installment.payment_id,
           transaction_type: 'installment',
@@ -226,44 +578,38 @@ export class PaymentService {
           },
         });
 
-        await tx.project.update({
-          where: { id: projectId },
-          data: { status: 'payment_completed' },
-        });
+        // Update project status
+        await updateProjectStatus(projectId, 'payment_completed');
       }
-
-      // Timeline entry
-      await tx.projectTimeline.create({
-        data: {
-          project_id: projectId,
-          event_type: 'installment_paid',
-          title: `Installment ${installment.installment_number} Paid`,
-          description: `Monthly installment of ${input.amount} SAR paid`,
-          created_by_id: userId,
-          created_by_role: 'user',
-          metadata: {
-            installment_number: installment.installment_number,
-            amount: input.amount,
-            late_fee: lateFee,
-            transaction_reference: paymentResult.reference,
-          },
-        },
-      });
 
       return updatedInstallment;
     });
 
+    // Add timeline entry in projects service
+    await addProjectTimeline(projectId, {
+      event_type: 'installment_paid',
+      title: `Installment ${installment.installment_number} Paid`,
+      description: `Monthly installment of ${input.amount} SAR paid`,
+      created_by_id: userId,
+      created_by_role: 'user',
+      metadata: {
+        installment_number: installment.installment_number,
+        amount: input.amount,
+        late_fee: lateFee,
+        transaction_reference: paymentResult.reference,
+      },
+    });
+
     // Replenish SAMA credit for BNPL payments
     // Only the installment amount (not late fees) gets added back to SAMA credit
-    // Note: Downpayments are NOT added back as they were cash, not borrowed from SAMA
     if (installment.payment.payment_method === 'bnpl') {
       try {
         await updateUserSamaCredit(
           userId,
-          installmentAmount, // Only the base installment amount, not late fees
+          installmentAmount,
           'add',
           projectId,
-          `Installment #${installment.installment_number} paid for project ${projectId}. Replenishing ${installmentAmount} SAR to SAMA credit.`,
+          `Installment #${installment.installment_number} paid for project ${projectId}. Replenishing ${installmentAmount} SAR to SAMA credit.`
         );
 
         logger.info('SAMA credit replenished after installment payment', {
@@ -274,8 +620,6 @@ export class PaymentService {
           lateFeeNotReplenished: lateFee,
         });
       } catch (error) {
-        // Log the error but don't fail the payment
-        // The payment was successful, SAMA credit update is a separate concern
         logger.error('Failed to replenish SAMA credit after installment payment', {
           error: error instanceof Error ? error.message : 'Unknown error',
           userId,
@@ -284,8 +628,7 @@ export class PaymentService {
           amountAttempted: installmentAmount,
         });
 
-        // You might want to create a retry mechanism or alert admins here
-        // For now, we just log and continue
+        // TODO: Create compensation task for manual processing
       }
     }
 
@@ -307,17 +650,23 @@ export class PaymentService {
     adminId: string,
     input: ReleasePaymentToContractorInput
   ) {
-    // Get project
-    const project = await projectsPrisma.project.findUnique({
-      where: { id: projectId },
-      include: { payment: true },
-    });
+    // Get project details
+    const project = await getProjectFromProjectsService(projectId);
 
-    if (!project || !project.payment) {
-      throw new NotFoundError('Project or payment not found');
+    if (!project) {
+      throw new NotFoundError('Project not found');
     }
 
-    if (project.payment.admin_paid_contractor) {
+    // Get payment from payment service database
+    const payment = await prisma.projectPayment.findUnique({
+      where: { project_id: projectId },
+    });
+
+    if (!payment) {
+      throw new NotFoundError('Payment not found');
+    }
+
+    if (payment.admin_paid_contractor) {
       throw new BusinessRuleError('Payment has already been released to contractor');
     }
 
@@ -329,14 +678,12 @@ export class PaymentService {
       throw new NotFoundError('Contractor not found in contractor database');
     }
 
-    // For BNPL, admin pays full amount to contractor upfront
-    // For single_pay, admin releases after user payment
     const amountToRelease = input.amount;
 
-    // Update projects database
-    const result = await projectsPrisma.$transaction(async (tx) => {
+    // Update payment service database
+    const result = await prisma.$transaction(async (tx) => {
       const updatedPayment = await tx.projectPayment.update({
-        where: { id: project.payment!.id },
+        where: { id: payment.id },
         data: {
           admin_paid_contractor: true,
           admin_payment_amount: amountToRelease,
@@ -349,22 +696,20 @@ export class PaymentService {
         },
       });
 
-      await tx.projectTimeline.create({
-        data: {
-          project_id: projectId,
-          event_type: 'admin_action',
-          title: 'Payment Released to Contractor',
-          description: `Admin released ${amountToRelease} SAR to contractor`,
-          created_by_id: adminId,
-          created_by_role: 'admin',
-          metadata: {
-            amount: amountToRelease,
-            reference: input.payment_reference,
-          },
-        },
-      });
-
       return updatedPayment;
+    });
+
+    // Add timeline entry in projects service
+    await addProjectTimeline(projectId, {
+      event_type: 'admin_action',
+      title: 'Payment Released to Contractor',
+      description: `Admin released ${amountToRelease} SAR to contractor`,
+      created_by_id: adminId,
+      created_by_role: 'admin',
+      metadata: {
+        amount: amountToRelease,
+        reference: input.payment_reference,
+      },
     });
 
     // Update contractor balance
@@ -424,9 +769,8 @@ export class PaymentService {
    * Get installment schedule
    */
   async getInstallmentSchedule(projectId: string, userId: string) {
-    const project = await projectsPrisma.project.findUnique({
-      where: { id: projectId },
-    });
+    // Verify project ownership
+    const project = await getProjectFromProjectsService(projectId);
 
     if (!project) {
       throw new NotFoundError('Project not found');
@@ -436,8 +780,8 @@ export class PaymentService {
       throw new BusinessRuleError('Unauthorized');
     }
 
-    // Get from projects database (where the data currently exists)
-    const payment = await projectsPrisma.projectPayment.findUnique({
+    // Get from payment service database
+    const payment = await prisma.projectPayment.findUnique({
       where: { project_id: projectId },
       include: {
         installments: {
@@ -447,6 +791,56 @@ export class PaymentService {
     });
 
     return payment?.installments || [];
+  }
+
+  /**
+   * Get payment details with installments (for project detail page)
+   * Returns null if payment doesn't exist
+   */
+  async getPaymentDetails(projectId: string, userId: string, userRole: string) {
+    // Verify project ownership
+    const project = await getProjectFromProjectsService(projectId);
+
+    if (!project) {
+      throw new NotFoundError('Project not found');
+    }
+
+    logger.info('Authorization check for payment details', {
+      projectId,
+      userId,
+      userRole,
+      projectUserId: project.user_id,
+      projectContractorId: project.contractor_id,
+    });
+
+    // Check authorization
+    if (
+      userRole.toLowerCase() !== 'admin' &&
+      userRole.toLowerCase() !== 'super_admin' &&
+      project.user_id !== userId &&
+      project.contractor_id !== userId
+    ) {
+      logger.error('Authorization failed for payment details', {
+        projectId,
+        userId,
+        userRole,
+        projectUserId: project.user_id,
+        projectContractorId: project.contractor_id,
+      });
+      throw new BusinessRuleError('Unauthorized');
+    }
+
+    // Get payment with installments from payment service database
+    const payment = await prisma.projectPayment.findUnique({
+      where: { project_id: projectId },
+      include: {
+        installments: {
+          orderBy: { installment_number: 'asc' },
+        },
+      },
+    });
+
+    return payment;
   }
 }
 

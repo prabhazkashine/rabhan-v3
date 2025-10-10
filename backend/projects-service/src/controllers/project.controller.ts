@@ -251,6 +251,7 @@ export class ProjectController {
       const installation = await installationService.scheduleInstallation(
         req.params.projectId,
         req.user!.id,
+        req.user!.role,
         req.body
       );
 
@@ -463,6 +464,56 @@ export class ProjectController {
         success: true,
         message: 'Review moderated successfully',
         data: review,
+      });
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  // ==================== INTERNAL API METHODS ====================
+  // These are called by other microservices
+
+  async getProjectInfo(req: AuthRequest, res: Response) {
+    try {
+      const project = await projectService.getProjectBasicInfo(req.params.projectId);
+
+      res.json({
+        success: true,
+        data: project,
+      });
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async updateProjectStatus(req: AuthRequest, res: Response) {
+    try {
+      const project = await projectService.updateProjectStatusOnly(
+        req.params.projectId,
+        req.body.status
+      );
+
+      res.json({
+        success: true,
+        message: 'Project status updated',
+        data: project,
+      });
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  async addTimelineEvent(req: AuthRequest, res: Response) {
+    try {
+      const timeline = await projectService.addTimelineEvent(
+        req.params.projectId,
+        req.body
+      );
+
+      res.json({
+        success: true,
+        message: 'Timeline event added',
+        data: timeline,
       });
     } catch (error) {
       throw error;

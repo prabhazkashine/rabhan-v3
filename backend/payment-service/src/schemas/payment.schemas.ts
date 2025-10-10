@@ -2,12 +2,11 @@ import { z } from 'zod';
 
 /**
  * Schema for selecting payment method
+ * Note: total_amount is optional - if not provided, it will be fetched from the project
  */
 export const selectPaymentMethodSchema = z.object({
-  payment_method: z.enum(['single_pay', 'bnpl'], {
-    required_error: 'Payment method is required',
-    invalid_type_error: 'Payment method must be either single_pay or bnpl',
-  }),
+  total_amount: z.number().positive('Total amount must be positive').optional(),
+  payment_method: z.enum(['single_pay', 'bnpl']),
   downpayment_amount: z
     .number()
     .min(0, 'Downpayment cannot be negative')

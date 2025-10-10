@@ -3,6 +3,7 @@ import { paymentController } from '../controllers/payment.controller';
 import { extractUserFromHeaders, requireRole } from '../middleware/auth.middleware';
 import { validateBody, validateParams } from '../middleware/validation.middleware';
 import {
+  selectPaymentMethodSchema,
   processDownpaymentSchema,
   payInstallmentSchema,
   releasePaymentToContractorSchema,
@@ -17,6 +18,15 @@ const projectIdSchema = z.object({
 });
 
 // ==================== USER PAYMENT ROUTES ====================
+
+// Select payment method (Single Pay or BNPL)
+router.post(
+  '/:projectId/select-payment-method',
+  auth,
+  validateParams(projectIdSchema),
+  validateBody(selectPaymentMethodSchema),
+  paymentController.selectPaymentMethod.bind(paymentController)
+);
 
 // Process downpayment (BNPL)
 router.post(
@@ -42,6 +52,14 @@ router.get(
   auth,
   validateParams(projectIdSchema),
   paymentController.getInstallmentSchedule.bind(paymentController)
+);
+
+// Get payment details (for project detail page)
+router.get(
+  '/:projectId/details',
+  auth,
+  validateParams(projectIdSchema),
+  paymentController.getPaymentDetails.bind(paymentController)
 );
 
 // ==================== ADMIN PAYMENT ROUTES ====================

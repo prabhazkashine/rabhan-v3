@@ -7,6 +7,7 @@ import {
 } from '../utils/errors';
 import { ProjectStatus, InstallationStatus } from '../generated/prisma';
 import { generateOTP, getOTPExpiry, isOTPValid, sendOTPViaSMS } from '../utils/otp';
+import { getPaymentDetailsViaPaymentService } from '../utils/payment-client';
 import type {
   ScheduleInstallationInput,
   StartInstallationInput,
@@ -23,28 +24,34 @@ export class InstallationService {
   async scheduleInstallation(
     projectId: string,
     userId: string,
+    userRole: string,
     input: ScheduleInstallationInput
   ) {
     const project = await prisma.project.findUnique({
       where: { id: projectId },
-      include: { installation: true, payment: true },
+      include: { installation: true },
     });
 
     if (!project) {
       throw new NotFoundError('Project not found');
     }
 
-    if (!project.payment) {
-      throw new BusinessRuleError('No payment record found for this project');
+    // Fetch payment details from payment service
+    const payment = await getPaymentDetailsViaPaymentService(projectId, userId, userRole);
+
+    if (!payment) {
+      throw new BusinessRuleError(
+        'No payment method has been selected for this project. Please select a payment method (Single Pay or BNPL) before scheduling installation.'
+      );
     }
 
     // For BNPL: Allow scheduling after downpayment (status: partially_paid or payment_processing)
     // For Single Payment: Only allow after full payment is completed
-    if (project.payment.payment_method === 'bnpl') {
+    if (payment.payment_method === 'bnpl') {
       // BNPL: Check if downpayment is received (partially_paid or payment_processing)
       if (
-        project.payment.payment_status !== 'partially_paid' &&
-        project.payment.payment_status !== 'completed' &&
+        payment.payment_status !== 'partially_paid' &&
+        payment.payment_status !== 'completed' &&
         project.status !== ProjectStatus.installation_scheduled
       ) {
         throw new BusinessRuleError('Downpayment must be received before scheduling installation for BNPL');

@@ -113,13 +113,7 @@ export class ProjectService {
     const project = await prisma.project.findUnique({
       where: { id: projectId },
       include: {
-        payment: {
-          include: {
-            installments: {
-              orderBy: { installment_number: 'asc' },
-            },
-          },
-        },
+        // payment removed - fetched from payment service
         installation: true,
         review: true,
         timeline: {
@@ -145,13 +139,26 @@ export class ProjectService {
       throw new NotFoundError('Project not found');
     }
 
+    // Fetch payment details from payment service
+    const { getPaymentDetailsViaPaymentService } = await import('../utils/payment-client');
+    const paymentDetails = await getPaymentDetailsViaPaymentService(
+      projectId,
+      userId,
+      userRole
+    );
+
     logger.info('Project retrieved', {
       projectId,
       userId,
       status: project.status,
+      hasPayment: !!paymentDetails,
     });
 
-    return project;
+    // Combine project with payment data
+    return {
+      ...project,
+      payment: paymentDetails,
+    };
   }
 
   /**
@@ -432,6 +439,71 @@ export class ProjectService {
     const timeline = await prisma.projectTimeline.findMany({
       where: { project_id: projectId },
       orderBy: { created_at: 'desc' },
+    });
+
+    return timeline;
+  }
+
+  /**
+   * Get basic project info (for other services)
+   */
+  async getProjectBasicInfo(projectId: string) {
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: {
+        id: true,
+        user_id: true,
+        contractor_id: true,
+        status: true,
+        total_amount: true,
+      },
+    });
+
+    if (!project) {
+      throw new NotFoundError('Project not found');
+    }
+
+    return project;
+  }
+
+  /**
+   * Update project status only (for other services)
+   */
+  async updateProjectStatusOnly(projectId: string, status: string) {
+    const project = await prisma.project.update({
+      where: { id: projectId },
+      data: { status: status as ProjectStatus },
+    });
+
+    logger.info('Project status updated', {
+      projectId,
+      status,
+    });
+
+    return project;
+  }
+
+  /**
+   * Add timeline event (for other services)
+   */
+  async addTimelineEvent(projectId: string, event: {
+    event_type: string;
+    title: string;
+    description: string;
+    created_by_id?: string;
+    created_by_role?: string;
+    metadata?: any;
+  }) {
+    const timeline = await prisma.projectTimeline.create({
+      data: {
+        project_id: projectId,
+        ...event,
+      } as any,
+    });
+
+    logger.info('Timeline event added', {
+      projectId,
+      eventType: event.event_type,
     });
 
     return timeline;

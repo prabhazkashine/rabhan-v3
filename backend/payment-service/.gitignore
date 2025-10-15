@@ -5,3 +5,6 @@ logs
 
 # Generated Prisma clients
 /src/generated
+
+# Ignore markdown documentation files
+*.md

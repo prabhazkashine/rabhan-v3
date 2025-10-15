@@ -51,6 +51,14 @@ export const payInstallmentSchema = z.object({
 });
 
 /**
+ * Schema for processing full payment (single pay)
+ */
+export const processFullPaymentSchema = z.object({
+  amount: z.number().positive('Payment amount must be positive').optional(),
+  payment_reference: z.string().optional(), // For mock payment gateway
+});
+
+/**
  * Schema for admin releasing payment to contractor
  */
 export const releasePaymentToContractorSchema = z.object({
@@ -85,6 +93,7 @@ export const getPaymentsQuerySchema = z.object({
 
 export type SelectPaymentMethodInput = z.infer<typeof selectPaymentMethodSchema>;
 export type ProcessDownpaymentInput = z.infer<typeof processDownpaymentSchema>;
+export type ProcessFullPaymentInput = z.infer<typeof processFullPaymentSchema>;
 export type PayInstallmentInput = z.infer<typeof payInstallmentSchema>;
 export type ReleasePaymentToContractorInput = z.infer<typeof releasePaymentToContractorSchema>;
 export type GetPaymentsQuery = z.infer<typeof getPaymentsQuerySchema>;

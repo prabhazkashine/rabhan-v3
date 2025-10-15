@@ -31,6 +31,27 @@ export class PaymentController {
   }
 
   /**
+   * Process full payment (single pay)
+   */
+  async processFullPayment(req: AuthRequest, res: Response) {
+    try {
+      const payment = await paymentService.processFullPayment(
+        req.params.projectId,
+        req.user!.id,
+        req.body
+      );
+
+      res.json({
+        success: true,
+        message: 'Full payment processed successfully',
+        data: payment,
+      });
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  /**
    * Process downpayment (BNPL)
    */
   async processDownpayment(req: AuthRequest, res: Response) {

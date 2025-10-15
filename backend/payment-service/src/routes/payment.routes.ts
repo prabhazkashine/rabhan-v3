@@ -5,6 +5,7 @@ import { validateBody, validateParams } from '../middleware/validation.middlewar
 import {
   selectPaymentMethodSchema,
   processDownpaymentSchema,
+  processFullPaymentSchema,
   payInstallmentSchema,
   releasePaymentToContractorSchema,
 } from '../schemas/payment.schemas';
@@ -26,6 +27,15 @@ router.post(
   validateParams(projectIdSchema),
   validateBody(selectPaymentMethodSchema),
   paymentController.selectPaymentMethod.bind(paymentController)
+);
+
+// Process full payment (single pay)
+router.post(
+  '/:projectId/pay-full',
+  auth,
+  validateParams(projectIdSchema),
+  validateBody(processFullPaymentSchema),
+  paymentController.processFullPayment.bind(paymentController)
 );
 
 // Process downpayment (BNPL)

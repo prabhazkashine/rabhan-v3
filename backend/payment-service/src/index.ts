@@ -22,9 +22,12 @@ app.get('/', (req, res) => {
     service: 'payment-service',
     version: '1.0.0',
     endpoints: {
+      selectPaymentMethod: 'POST /api/payments/:projectId/select-payment-method',
+      fullPayment: 'POST /api/payments/:projectId/pay-full',
       downpayment: 'POST /api/payments/:projectId/pay-downpayment',
       installment: 'POST /api/payments/:projectId/pay-installment',
       installmentSchedule: 'GET /api/payments/:projectId/installments',
+      paymentDetails: 'GET /api/payments/:projectId/details',
       releasePayment: 'POST /api/payments/:projectId/release-payment (admin)',
     },
   });

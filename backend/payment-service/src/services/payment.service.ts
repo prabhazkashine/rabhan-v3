@@ -26,6 +26,7 @@ import {
 import type {
   SelectPaymentMethodInput,
   ProcessDownpaymentInput,
+  ProcessFullPaymentInput,
   PayInstallmentInput,
   ReleasePaymentToContractorInput,
 } from '../schemas/payment.schemas';
@@ -369,6 +370,117 @@ export class PaymentService {
 
       return payment;
     });
+  }
+
+  /**
+   * Process full payment (single pay)
+   */
+  async processFullPayment(
+    projectId: string,
+    userId: string,
+    input: ProcessFullPaymentInput
+  ) {
+    const startTime = Date.now();
+
+    logger.info('Processing full payment', {
+      projectId,
+      userId,
+      amount: input.amount,
+    });
+
+    // Get project details from projects service
+    const project = await getProjectFromProjectsService(projectId);
+
+    if (!project) {
+      throw new NotFoundError('Project not found');
+    }
+
+    if (project.user_id !== userId) {
+      throw new BusinessRuleError('Unauthorized');
+    }
+
+    // Get payment from payment service database
+    const payment = await prisma.projectPayment.findUnique({
+      where: { project_id: projectId },
+    });
+
+    if (!payment) {
+      throw new NotFoundError('Payment record not found');
+    }
+
+    if (payment.payment_method !== 'single_pay') {
+      throw new BusinessRuleError('This project is not using single payment method');
+    }
+
+    if (payment.payment_status === 'completed') {
+      throw new BusinessRuleError('Payment has already been completed');
+    }
+
+    const totalAmount = decimalToNumber(payment.total_amount);
+    const paymentAmount = input.amount || totalAmount;
+
+    if (paymentAmount < totalAmount) {
+      throw new ValidationError(`Payment amount must be at least ${totalAmount} SAR`);
+    }
+
+    // Process mock payment
+    const paymentResult = await processMockPayment(paymentAmount, 'full_payment', userId);
+
+    if (!paymentResult.success) {
+      throw new PaymentError(paymentResult.message);
+    }
+
+    // Update payment service database
+    const result = await prisma.$transaction(async (tx) => {
+      // Create transaction record
+      await tx.projectPaymentTransaction.create({
+        data: {
+          payment_id: payment.id,
+          transaction_type: 'full_payment',
+          amount: paymentAmount,
+          status: 'success',
+          transaction_reference: paymentResult.reference,
+        },
+      });
+
+      // Update payment record
+      const updatedPayment = await tx.projectPayment.update({
+        where: { id: payment.id },
+        data: {
+          paid_amount: paymentAmount,
+          remaining_amount: 0,
+          payment_status: 'completed',
+          completed_at: new Date(),
+        },
+      });
+
+      return updatedPayment;
+    });
+
+    // Update project status to payment_completed
+    await updateProjectStatus(projectId, 'payment_completed');
+
+    // Add timeline entry in projects service
+    await addProjectTimeline(projectId, {
+      event_type: 'full_payment_received',
+      title: 'Full Payment Received',
+      description: `Full payment of ${paymentAmount} SAR received`,
+      created_by_id: userId,
+      created_by_role: 'user',
+      metadata: {
+        amount: paymentAmount,
+        transaction_reference: paymentResult.reference,
+      },
+    });
+
+    logger.info('Full payment processed successfully', {
+      projectId,
+      amount: paymentAmount,
+      reference: paymentResult.reference,
+      duration: Date.now() - startTime,
+    });
+
+    return result;
   }
 
   /**

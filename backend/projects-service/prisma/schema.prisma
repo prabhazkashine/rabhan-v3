@@ -83,42 +83,42 @@ enum TimelineEventType {
 // ========================================
 
 model Project {
-  id                    String            @id @default(uuid())
+  id String @id @default(uuid())
 
   // References to other services
-  quote_id              String            @unique
-  user_id               String
-  contractor_id         String
+  quote_id      String @unique
+  user_id       String
+  contractor_id String
 
   // Status tracking
-  status                ProjectStatus     @default(payment_pending)
+  status ProjectStatus @default(payment_pending)
 
   // Financial details (copied from quote for reference)
-  total_amount          Decimal           @db.Decimal(12, 2)
-  system_size_kwp       Decimal?          @db.Decimal(8, 2)
+  total_amount    Decimal  @db.Decimal(12, 2)
+  system_size_kwp Decimal? @db.Decimal(8, 2)
 
   // Project metadata
-  project_name          String?
-  description           String?           @db.Text
-  property_address      String?           @db.Text
+  project_name     String?
+  description      String? @db.Text
+  property_address String? @db.Text
 
   // Scheduling
   preferred_installation_date DateTime?
   actual_installation_date    DateTime?
 
   // Timestamps
-  created_at            DateTime          @default(now())
-  updated_at            DateTime          @updatedAt
-  completed_at          DateTime?
-  cancelled_at          DateTime?
-  cancellation_reason   String?           @db.Text
+  created_at          DateTime  @default(now())
+  updated_at          DateTime  @updatedAt
+  completed_at        DateTime?
+  cancelled_at        DateTime?
+  cancellation_reason String?   @db.Text
 
   // Relations
-  payment               ProjectPayment?
-  installation          ProjectInstallation?
-  review                ProjectReview?
-  timeline              ProjectTimeline[]
-  documents             ProjectDocument[]
+  payment      ProjectPayment?
+  installation ProjectInstallation?
+  review       ProjectReview?
+  timeline     ProjectTimeline[]
+  documents    ProjectDocument[]
 
   @@index([user_id])
   @@index([contractor_id])
@@ -128,48 +128,48 @@ model Project {
 }
 
 model ProjectPayment {
-  id                    String              @id @default(uuid())
-  project_id            String              @unique
+  id         String @id @default(uuid())
+  project_id String @unique
 
   // Payment method and status
-  payment_method        PaymentMethod
-  payment_status        PaymentStatus       @default(pending)
+  payment_method PaymentMethod
+  payment_status PaymentStatus @default(pending)
 
   // Amounts
-  total_amount          Decimal             @db.Decimal(12, 2)
-  downpayment_amount    Decimal             @default(0) @db.Decimal(12, 2)
-  remaining_amount      Decimal             @default(0) @db.Decimal(12, 2)
-  paid_amount           Decimal             @default(0) @db.Decimal(12, 2)
+  total_amount       Decimal @db.Decimal(12, 2)
+  downpayment_amount Decimal @default(0) @db.Decimal(12, 2)
+  remaining_amount   Decimal @default(0) @db.Decimal(12, 2)
+  paid_amount        Decimal @default(0) @db.Decimal(12, 2)
 
   // BNPL specific fields
   number_of_installments Int?
-  monthly_emi           Decimal?            @db.Decimal(12, 2)
+  monthly_emi            Decimal? @db.Decimal(12, 2)
 
   // Mock payment details
-  payment_reference     String?             @unique
-  payment_gateway       String?             @default("mock_gateway")
+  payment_reference String? @unique
+  payment_gateway   String? @default("mock_gateway")
 
   // Admin to contractor payment tracking
-  admin_paid_contractor Boolean             @default(false)
-  admin_payment_amount  Decimal?            @db.Decimal(12, 2)
-  admin_paid_at         DateTime?
+  admin_paid_contractor   Boolean   @default(false)
+  admin_payment_amount    Decimal?  @db.Decimal(12, 2)
+  admin_paid_at           DateTime?
   admin_payment_reference String?
-  admin_payment_notes   String?             @db.Text
+  admin_payment_notes     String?   @db.Text
 
   // Contractor payment details
-  contractor_bank_name  String?
-  contractor_iban       String?
+  contractor_bank_name      String?
+  contractor_iban           String?
   contractor_account_holder String?
 
   // Timestamps
-  created_at            DateTime            @default(now())
-  updated_at            DateTime            @updatedAt
-  completed_at          DateTime?
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
+  completed_at DateTime?
 
   // Relations
-  project               Project             @relation(fields: [project_id], references: [id], onDelete: Cascade)
-  installments          InstallmentSchedule[]
-  transactions          PaymentTransaction[]
+  project      Project               @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  installments InstallmentSchedule[]
+  transactions PaymentTransaction[]
 
   @@index([payment_status])
   @@index([payment_method])
@@ -177,70 +177,70 @@ model ProjectPayment {
 }
 
 model InstallmentSchedule {
-  id                    String              @id @default(uuid())
-  payment_id            String
+  id         String @id @default(uuid())
+  payment_id String
 
   // Installment details
-  installment_number    Int
-  amount                Decimal             @db.Decimal(12, 2)
-  due_date              DateTime
-  status                InstallmentStatus   @default(upcoming)
+  installment_number Int
+  amount             Decimal           @db.Decimal(12, 2)
+  due_date           DateTime
+  status             InstallmentStatus @default(upcoming)
 
   // Payment tracking
-  paid_amount           Decimal             @default(0) @db.Decimal(12, 2)
-  paid_at               DateTime?
-  payment_reference     String?
-  payment_method        String?             @default("mock_payment")
+  paid_amount       Decimal   @default(0) @db.Decimal(12, 2)
+  paid_at           DateTime?
+  payment_reference String?
+  payment_method    String?   @default("mock_payment")
 
   // Late payment tracking
-  is_overdue            Boolean             @default(false)
-  overdue_days          Int                 @default(0)
-  late_fee              Decimal             @default(0) @db.Decimal(10, 2)
+  is_overdue   Boolean @default(false)
+  overdue_days Int     @default(0)
+  late_fee     Decimal @default(0) @db.Decimal(10, 2)
 
   // Reminders
-  reminder_sent         Boolean             @default(false)
-  reminder_sent_at      DateTime?
+  reminder_sent    Boolean   @default(false)
+  reminder_sent_at DateTime?
 
   // Timestamps
-  created_at            DateTime            @default(now())
-  updated_at            DateTime            @updatedAt
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 
   // Relations
-  payment               ProjectPayment      @relation(fields: [payment_id], references: [id], onDelete: Cascade)
+  payment ProjectPayment @relation(fields: [payment_id], references: [id], onDelete: Cascade)
 
+  @@unique([payment_id, installment_number])
   @@index([payment_id])
   @@index([due_date])
   @@index([status])
-  @@unique([payment_id, installment_number])
   @@map("installment_schedules")
 }
 
 model PaymentTransaction {
-  id                    String              @id @default(uuid())
-  payment_id            String
+  id         String @id @default(uuid())
+  payment_id String
 
   // Transaction details
-  transaction_type      String              // 'downpayment', 'full_payment', 'installment', 'admin_to_contractor'
-  amount                Decimal             @db.Decimal(12, 2)
-  status                String              // 'pending', 'success', 'failed'
+  transaction_type String // 'downpayment', 'full_payment', 'installment', 'admin_to_contractor'
+  amount           Decimal @db.Decimal(12, 2)
+  status           String // 'pending', 'success', 'failed'
 
   // Mock payment details
-  transaction_reference String              @unique
-  payment_method        String              @default("mock_payment")
+  transaction_reference String @unique
+  payment_method        String @default("mock_payment")
 
   // Related installment (if applicable)
-  installment_id        String?
+  installment_id String?
 
   // Metadata
-  metadata              Json?
-  failure_reason        String?             @db.Text
+  metadata       Json?
+  failure_reason String? @db.Text
 
   // Timestamps
-  created_at            DateTime            @default(now())
-  processed_at          DateTime?
+  created_at   DateTime  @default(now())
+  processed_at DateTime?
 
   // Relations
-  payment               ProjectPayment      @relation(fields: [payment_id], references: [id], onDelete: Cascade)
+  payment ProjectPayment @relation(fields: [payment_id], references: [id], onDelete: Cascade)
 
   @@index([payment_id])
   @@index([transaction_reference])
@@ -249,58 +249,58 @@ model PaymentTransaction {
 }
 
 model ProjectInstallation {
-  id                    String              @id @default(uuid())
-  project_id            String              @unique
+  id         String @id @default(uuid())
+  project_id String @unique
 
   // Installation status
-  status                InstallationStatus  @default(not_started)
+  status InstallationStatus @default(not_started)
 
   // Scheduling
-  scheduled_date        DateTime?
-  scheduled_time_slot   String?             // e.g., "09:00-12:00"
+  scheduled_date      DateTime?
+  scheduled_time_slot String? // e.g., "09:00-12:00"
 
   // Tracking
-  started_at            DateTime?
-  completed_at          DateTime?
-  verified_at           DateTime?
+  started_at   DateTime?
+  completed_at DateTime?
+  verified_at  DateTime?
 
   // Duration tracking
   estimated_duration_hours Int?
   actual_duration_hours    Int?
 
   // OTP verification
-  otp_code              String?
-  otp_expires_at        DateTime?
-  otp_attempts          Int                 @default(0)
-  max_otp_attempts      Int                 @default(3)
-  otp_verified          Boolean             @default(false)
+  otp_code         String?
+  otp_expires_at   DateTime?
+  otp_attempts     Int       @default(0)
+  max_otp_attempts Int       @default(3)
+  otp_verified     Boolean   @default(false)
 
   // Installation details
-  installation_notes    String?             @db.Text
-  equipment_installed   Json?               // Array of installed equipment
-  warranty_info         Json?               // Warranty details
+  installation_notes  String? @db.Text
+  equipment_installed Json? // Array of installed equipment
+  warranty_info       Json? // Warranty details
 
   // Team information
-  installation_team     String?             @db.Text
-  team_lead_name        String?
-  team_lead_phone       String?
+  installation_team String? @db.Text
+  team_lead_name    String?
+  team_lead_phone   String?
 
   // Quality checks
-  quality_check_passed  Boolean?
-  quality_check_notes   String?             @db.Text
-  quality_checked_by    String?
-  quality_checked_at    DateTime?
+  quality_check_passed Boolean?
+  quality_check_notes  String?   @db.Text
+  quality_checked_by   String?
+  quality_checked_at   DateTime?
 
   // Contractor notes
-  contractor_notes      String?             @db.Text
-  issues_encountered    String?             @db.Text
+  contractor_notes   String? @db.Text
+  issues_encountered String? @db.Text
 
   // Timestamps
-  created_at            DateTime            @default(now())
-  updated_at            DateTime            @updatedAt
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 
   // Relations
-  project               Project             @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
 
   @@index([status])
   @@index([scheduled_date])
@@ -308,54 +308,54 @@ model ProjectInstallation {
 }
 
 model ProjectReview {
-  id                    String              @id @default(uuid())
-  project_id            String              @unique
+  id         String @id @default(uuid())
+  project_id String @unique
 
   // Review metadata
-  user_id               String
-  contractor_id         String
+  user_id       String
+  contractor_id String
 
   // Overall rating (1-5 stars, with decimals)
-  rating                Decimal             @db.Decimal(2, 1)
+  rating Decimal @db.Decimal(2, 1)
 
   // Review text
-  review_text           String?             @db.Text
-  review_title          String?
+  review_text  String? @db.Text
+  review_title String?
 
   // Detailed ratings (1-5 scale)
-  quality_rating        Int?
-  communication_rating  Int?
-  timeliness_rating     Int?
+  quality_rating         Int?
+  communication_rating   Int?
+  timeliness_rating      Int?
   professionalism_rating Int?
-  value_rating          Int?
+  value_rating           Int?
 
   // Recommendations
-  would_recommend       Boolean?
+  would_recommend Boolean?
 
   // Media
-  has_photos            Boolean             @default(false)
-  photo_urls            Json?               // Array of photo URLs
+  has_photos Boolean @default(false)
+  photo_urls Json? // Array of photo URLs
 
   // Review status
-  is_verified           Boolean             @default(true)
-  is_visible            Boolean             @default(true)
+  is_verified Boolean @default(true)
+  is_visible  Boolean @default(true)
 
   // Admin moderation
-  is_flagged            Boolean             @default(false)
-  flag_reason           String?             @db.Text
-  moderated_by          String?
-  moderated_at          DateTime?
+  is_flagged   Boolean   @default(false)
+  flag_reason  String?   @db.Text
+  moderated_by String?
+  moderated_at DateTime?
 
   // Contractor response
-  contractor_response   String?             @db.Text
+  contractor_response     String?   @db.Text
   contractor_responded_at DateTime?
 
   // Timestamps
-  created_at            DateTime            @default(now())
-  updated_at            DateTime            @updatedAt
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 
   // Relations
-  project               Project             @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
 
   @@index([contractor_id])
   @@index([rating])
@@ -365,27 +365,27 @@ model ProjectReview {
 }
 
 model ProjectTimeline {
-  id                    String              @id @default(uuid())
-  project_id            String
+  id         String @id @default(uuid())
+  project_id String
 
   // Event details
-  event_type            TimelineEventType
-  title                 String
-  description           String              @db.Text
+  event_type  TimelineEventType
+  title       String
+  description String            @db.Text
 
   // Additional metadata
-  metadata              Json?
+  metadata Json?
 
   // Actor information
-  created_by_id         String?
-  created_by_role       String?             // 'user', 'contractor', 'admin', 'system'
-  created_by_name       String?
+  created_by_id   String?
+  created_by_role String? // 'user', 'contractor', 'admin', 'system'
+  created_by_name String?
 
   // Timestamp
-  created_at            DateTime            @default(now())
+  created_at DateTime @default(now())
 
   // Relations
-  project               Project             @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
 
   @@index([project_id])
   @@index([created_at])
@@ -394,35 +394,35 @@ model ProjectTimeline {
 }
 
 model ProjectDocument {
-  id                    String              @id @default(uuid())
-  project_id            String
+  id         String @id @default(uuid())
+  project_id String
 
   // Document details
-  document_type         String              // 'installation_photo', 'certificate', 'warranty', 'invoice', 'contract'
-  title                 String
-  description           String?             @db.Text
+  document_type String // 'installation_photo', 'certificate', 'warranty', 'invoice', 'contract'
+  title         String
+  description   String? @db.Text
 
   // File information
-  file_url              String
-  file_name             String
-  file_size             Int?                // Size in bytes
-  file_mime_type        String?
+  file_url       String
+  file_name      String
+  file_size      Int? // Size in bytes
+  file_mime_type String?
 
   // Upload metadata
-  uploaded_by_id        String
-  uploaded_by_role      String              // 'contractor', 'admin', 'user'
+  uploaded_by_id   String
+  uploaded_by_role String // 'contractor', 'admin', 'user'
 
   // Verification
-  is_verified           Boolean             @default(false)
-  verified_by           String?
-  verified_at           DateTime?
+  is_verified Boolean   @default(false)
+  verified_by String?
+  verified_at DateTime?
 
   // Timestamps
-  created_at            DateTime            @default(now())
-  updated_at            DateTime            @updatedAt
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
 
   // Relations
-  project               Project             @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [project_id], references: [id], onDelete: Cascade)
 
   @@index([project_id])
   @@index([document_type])

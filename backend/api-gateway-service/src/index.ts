@@ -11,6 +11,7 @@ import solarCalculatorRouter from './routes/solarCalculatorRoutes';
 import projectsRouter from './routes/projectRoutes';
 import paymentRouter from './routes/paymentRoutes';
 import cors from 'cors';
+import ticketsRouter from './routes/ticketRoutes';
 
 const app = express();
 const PORT = process.env.API_GATEWAY_PORT || 8000;
@@ -65,6 +66,8 @@ app.use('/api', projectsRouter);
 
 app.use('/api', paymentRouter);
 
+app.use('/api', ticketsRouter);
+
 
 
 app.listen(PORT, () => {
@@ -80,5 +83,6 @@ app.listen(PORT, () => {
   - /api/solar/calculate -> Solar Calculator Service (No Auth)
   - /api/projects/ -> Projects Service (Authenticated)
   - /api/payments/ -> Payment Service (Authenticated)
+  - /api/tickets/ -> Tickets Service (Authenticated)
   `);
 });

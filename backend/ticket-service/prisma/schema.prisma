@@ -1,0 +1,218 @@
+// Ticket Service Prisma Schema
+// Manages support tickets for completed projects
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ========================================
+// ENUMS
+// ========================================
+
+enum TicketStatus {
+  open
+  in_progress
+  on_hold
+  resolved
+  closed
+  reopened
+}
+
+enum TicketPriority {
+  low
+  medium
+  high
+  urgent
+}
+
+enum TicketCategory {
+  defect
+  maintenance
+  warranty
+  performance
+  billing
+  installation
+  account_issue
+  general_inquiry
+  complaint
+  other
+}
+
+enum TicketType {
+  project_support    // User -> Contractor (existing functionality)
+  admin_support      // User -> Admin/SuperAdmin (new functionality)
+}
+
+// ========================================
+// MODELS
+// ========================================
+
+model Ticket {
+  id String @id @default(uuid())
+
+  // Ticket type
+  ticket_type TicketType @default(project_support)
+
+  // References to other services
+  project_id    String?  // Optional for admin tickets
+  user_id       String
+  contractor_id String?  // Optional for admin tickets
+  admin_id      String?  // For admin_support tickets
+
+  // Ticket details
+  title       String
+  description String @db.Text
+  category    TicketCategory
+  priority    TicketPriority @default(medium)
+  status      TicketStatus @default(open)
+
+  // Timeline and tracking
+  created_at           DateTime @default(now())
+  updated_at           DateTime @updatedAt
+  resolved_at          DateTime?
+  closed_at            DateTime?
+  first_response_at    DateTime?
+  last_response_at     DateTime?
+
+  // Resolution details
+  resolution_summary   String? @db.Text
+  resolved_by_role     String? // 'contractor', 'admin', 'super_admin', or 'system'
+
+  // Metrics
+  response_time_hours  Int?
+  resolution_time_hours Int?
+
+  // Relations
+  replies   TicketReply[]
+  timeline  TicketTimeline[]
+  documents TicketDocument[]
+
+  @@index([ticket_type])
+  @@index([project_id])
+  @@index([user_id])
+  @@index([contractor_id])
+  @@index([admin_id])
+  @@index([status])
+  @@index([priority])
+  @@index([created_at])
+  @@index([category])
+  @@map("tickets")
+}
+
+model TicketReply {
+  id String @id @default(uuid())
+
+  ticket_id String
+  user_id   String
+  role      String // 'user', 'contractor', 'admin', or 'super_admin'
+
+  // Reply content
+  message   String @db.Text
+  is_solution Boolean @default(false) // Marks if this reply solved the issue
+
+  // Metadata
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  // Relations
+  ticket Ticket @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
+  documents TicketReplyDocument[]
+
+  @@index([ticket_id])
+  @@index([user_id])
+  @@index([created_at])
+  @@map("ticket_replies")
+}
+
+model TicketReplyDocument {
+  id String @id @default(uuid())
+
+  reply_id      String
+  document_type String // 'image', 'video', 'pdf', 'other'
+  file_url      String
+  file_name     String
+  file_size     Int? // Size in bytes
+  file_mime_type String?
+
+  // Upload metadata
+  uploaded_by_id String
+  uploaded_by_role String // 'user', 'contractor', 'admin', or 'super_admin'
+
+  // Timestamps
+  created_at DateTime @default(now())
+
+  // Relations
+  reply TicketReply @relation(fields: [reply_id], references: [id], onDelete: Cascade)
+
+  @@index([reply_id])
+  @@map("ticket_reply_documents")
+}
+
+model TicketDocument {
+  id String @id @default(uuid())
+
+  ticket_id      String
+  document_type  String // 'image', 'video', 'pdf', 'other'
+  file_url       String
+  file_name      String
+  file_size      Int? // Size in bytes
+  file_mime_type String?
+  title          String?
+  description    String? @db.Text
+
+  // Upload metadata
+  uploaded_by_id   String
+  uploaded_by_role String // 'user', 'contractor', 'admin', or 'super_admin'
+
+  // Verification
+  is_verified Boolean   @default(false)
+  verified_by String?
+  verified_at DateTime?
+
+  // Timestamps
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  // Relations
+  ticket Ticket @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
+
+  @@index([ticket_id])
+  @@index([document_type])
+  @@map("ticket_documents")
+}
+
+model TicketTimeline {
+  id String @id @default(uuid())
+
+  ticket_id String
+
+  // Event details
+  event_type String // 'created', 'replied', 'status_changed', 'priority_changed', 'resolved', 'closed', 'reopened'
+  title      String
+  description String @db.Text
+
+  // Actor information
+  created_by_id   String
+  created_by_role String // 'user', 'contractor', 'admin', 'system'
+  created_by_name String?
+
+  // Metadata (for status changes, priority changes, etc.)
+  metadata Json?
+
+  // Timestamp
+  created_at DateTime @default(now())
+
+  // Relations
+  ticket Ticket @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
+
+  @@index([ticket_id])
+  @@index([created_at])
+  @@index([event_type])
+  @@map("ticket_timelines")
+}

@@ -688,7 +688,7 @@ export class TicketController {
   /**
    * Assign admin ticket to an admin
    * PATCH /api/tickets/:ticketId/assign-admin
-   * Only super_admin can assign tickets to admins
+   * Requires admin/super_admin role with TICKETS UPDATE permission
    */
   async assignAdminTicket(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
@@ -700,13 +700,8 @@ export class TicketController {
         return;
       }
 
-      if (req.user.role !== 'super_admin') {
-        res.status(403).json({
-          success: false,
-          message: 'Only super admin can assign tickets'
-        });
-        return;
-      }
+      // Permission check is handled by middleware
+      // Any admin with TICKETS UPDATE permission can assign
 
       const { ticketId } = req.params;
       const { admin_id } = req.body;

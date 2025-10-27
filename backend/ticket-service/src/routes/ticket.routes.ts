@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { ticketController } from '../controllers/ticket.controller';
 import { authMiddleware } from '../middleware/auth.middleware';
+import { checkPermission, checkAdminPermission } from '../middleware/permission.middleware';
 import { validateRequest, validateQuery, validateParams } from '../middleware/validation.middleware';
 import {
   createTicketSchema,
@@ -71,11 +72,12 @@ router.post('/admin',
 /**
  * GET /api/tickets/admin
  * Get all admin support tickets
- * Only accessible by admin and super_admin roles
+ * Requires: admin/super_admin role + TICKETS READ permission
  */
 router.get('/admin',
   authMiddleware.authenticate,
   authMiddleware.authorizeRole(['admin', 'super_admin']),
+  checkPermission('TICKETS', 'READ'),
   validateQuery(getTicketsQuerySchema),
   asyncHandler(async (req: Request, res: Response) => {
     await ticketController.getAdminTickets(req, res);
@@ -125,11 +127,13 @@ router.get('/:ticketId',
 /**
  * PUT /api/tickets/:ticketId
  * Update ticket details (title, description, priority)
+ * Admin users require TICKETS UPDATE permission
  */
 router.put('/:ticketId',
   authMiddleware.authenticate,
   validateParams(ticketIdParamSchema),
   validateRequest(updateTicketSchema),
+  checkAdminPermission('TICKETS', 'UPDATE'),
   asyncHandler(async (req: Request, res: Response) => {
     await ticketController.updateTicket(req, res);
   })
@@ -138,11 +142,13 @@ router.put('/:ticketId',
 /**
  * PATCH /api/tickets/:ticketId/status
  * Update ticket status (open, in_progress, resolved, closed, etc.)
+ * Admin users require TICKETS UPDATE permission
  */
 router.patch('/:ticketId/status',
   authMiddleware.authenticate,
   validateParams(ticketIdParamSchema),
   validateRequest(updateTicketStatusSchema),
+  checkAdminPermission('TICKETS', 'UPDATE'),
   asyncHandler(async (req: Request, res: Response) => {
     await ticketController.updateTicketStatus(req, res);
   })
@@ -153,11 +159,13 @@ router.patch('/:ticketId/status',
 /**
  * POST /api/tickets/:ticketId/replies
  * Add a reply to a ticket
+ * Admin users require TICKETS WRITE permission
  */
 router.post('/:ticketId/replies',
   authMiddleware.authenticate,
   validateParams(ticketIdParamSchema),
   validateRequest(createTicketReplySchema),
+  checkAdminPermission('TICKETS', 'WRITE'),
   asyncHandler(async (req: Request, res: Response) => {
     await ticketController.addReply(req, res);
   })
@@ -196,10 +204,12 @@ router.get('/:ticketId/timeline',
  * POST /api/tickets/:ticketId/documents
  * Upload documents to a ticket (images and PDFs only, max 3 files, 5MB each)
  * Uses multipart/form-data with field name "documents"
+ * Admin users require TICKETS WRITE permission
  */
 router.post('/:ticketId/documents',
   authMiddleware.authenticate,
   validateParams(ticketIdParamSchema),
+  checkAdminPermission('TICKETS', 'WRITE'),
   (req: Request, res: Response, next: NextFunction) => {
     uploadTicketDocuments(req, res, (err: any) => {
       if (err) {
@@ -233,11 +243,12 @@ router.get('/:ticketId/documents',
 /**
  * PATCH /api/tickets/:ticketId/assign-admin
  * Assign an admin ticket to an admin/super_admin
- * Only accessible by admin and super_admin roles
+ * Requires: admin/super_admin role + TICKETS UPDATE permission
  */
 router.patch('/:ticketId/assign-admin',
   authMiddleware.authenticate,
   authMiddleware.authorizeRole(['admin', 'super_admin']),
+  checkPermission('TICKETS', 'UPDATE'),
   validateParams(ticketIdParamSchema),
   asyncHandler(async (req: Request, res: Response) => {
     await ticketController.assignAdminTicket(req, res);

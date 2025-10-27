@@ -49,6 +49,7 @@ enum ResourceType {
   QUOTATIONS
   PRODUCTS
   DOCUMENTS
+  TICKETS
 }
 
 enum PermissionAction {

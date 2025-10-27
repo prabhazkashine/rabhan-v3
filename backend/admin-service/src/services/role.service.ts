@@ -39,6 +39,16 @@ class RoleService {
         // Products permissions (read and update only)
         { resource: ResourceType.PRODUCTS, action: PermissionAction.READ, description: 'View products' },
         { resource: ResourceType.PRODUCTS, action: PermissionAction.UPDATE, description: 'Update products' },
+
+        // Documents permissions (read and write only)
+        { resource: ResourceType.DOCUMENTS, action: PermissionAction.READ, description: 'View documents' },
+        { resource: ResourceType.DOCUMENTS, action: PermissionAction.WRITE, description: 'Create documents' },
+
+        // Tickets permissions (full CRUD)
+        { resource: ResourceType.TICKETS, action: PermissionAction.READ, description: 'View tickets' },
+        { resource: ResourceType.TICKETS, action: PermissionAction.WRITE, description: 'Create tickets' },
+        { resource: ResourceType.TICKETS, action: PermissionAction.UPDATE, description: 'Update and assign tickets' },
+        { resource: ResourceType.TICKETS, action: PermissionAction.DELETE, description: 'Delete tickets' },
       ];
 
       for (const permission of permissions) {
@@ -580,7 +590,13 @@ class RoleService {
           { resource: ResourceType.QUOTATIONS, action: PermissionAction.READ },
           { resource: ResourceType.QUOTATIONS, action: PermissionAction.UPDATE },
           { resource: ResourceType.PRODUCTS, action: PermissionAction.READ },
-          { resource: ResourceType.PRODUCTS, action: PermissionAction.UPDATE }
+          { resource: ResourceType.PRODUCTS, action: PermissionAction.UPDATE },
+          { resource: ResourceType.DOCUMENTS, action: PermissionAction.READ },
+          { resource: ResourceType.DOCUMENTS, action: PermissionAction.WRITE },
+          { resource: ResourceType.TICKETS, action: PermissionAction.READ },
+          { resource: ResourceType.TICKETS, action: PermissionAction.WRITE },
+          { resource: ResourceType.TICKETS, action: PermissionAction.UPDATE },
+          { resource: ResourceType.TICKETS, action: PermissionAction.DELETE }
         ];
       }
 

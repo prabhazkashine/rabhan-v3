@@ -156,8 +156,9 @@ export class TicketService {
 
   /**
    * Get all admin tickets for admins/super_admins
-   * - Super admins see ALL admin_support tickets
-   * - Regular admins see tickets assigned to them + unassigned tickets
+   * With permission-based access control, all admins with TICKETS READ permission can see all tickets
+   * - Admins with permission see ALL admin_support tickets
+   * - Permission check is handled by middleware
    */
   async getAdminTickets(
     adminId: string | null,
@@ -183,12 +184,8 @@ export class TicketService {
         ticket_type: 'admin_support'
       };
 
-      if (userRole !== 'super_admin' && adminId) {
-        whereClause.OR = [
-          { admin_id: adminId }, 
-          { admin_id: null }     
-        ];
-      }
+      // Permission-based access: All admins with TICKETS READ permission can see all tickets
+      // No filtering by admin_id - middleware handles permission check
 
       if (filters?.status) whereClause.status = filters.status;
       if (filters?.priority) whereClause.priority = filters.priority;
@@ -579,10 +576,11 @@ export class TicketService {
             throw new AppError('Only the user who created this ticket can mark it as resolved', 403);
           }
         } else if (ticket.ticket_type === 'admin_support') {
+          // Permission-based access: All admins with proper permissions can resolve
           const canResolve =
             (userRole === 'user' && ticket.user_id === userId) ||
             (userRole === 'contractor' && ticket.user_id === userId) ||
-            (userRole === 'admin' && ticket.admin_id === userId) ||
+            (userRole === 'admin') ||  // Any admin can resolve (permission checked by middleware)
             (userRole === 'super_admin');
 
           if (!canResolve) {
@@ -695,9 +693,9 @@ export class TicketService {
         if (userRole === 'contractor' && ticket.user_id !== userId) {
           throw new AppError('You can only reply to admin tickets you created', 403);
         }
-        if (userRole === 'admin' && ticket.admin_id !== userId) {
-          throw new AppError('You can only reply to tickets assigned to you', 403);
-        }
+        // Permission-based access: Admins with proper permissions can reply to any admin ticket
+        // Permission check is handled by route middleware if needed
+        // Allow all admins and super_admins to reply
       }
 
       const reply = await prisma.ticketReply.create({

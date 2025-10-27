@@ -213,7 +213,12 @@ export class TicketController {
           hasAccess = true;
         }
       } else if (req.user.role === 'contractor') {
-        if (ticket.ticket_type === 'project_support' && ticket.contractor_id === req.user.id) {
+        // Contractor can view project_support tickets assigned to them
+        // OR admin_support tickets they created
+        if (
+          (ticket.ticket_type === 'project_support' && ticket.contractor_id === req.user.id) ||
+          (ticket.ticket_type === 'admin_support' && ticket.user_id === req.user.id)
+        ) {
           hasAccess = true;
         }
       }
@@ -458,8 +463,9 @@ export class TicketController {
   // ============ DOCUMENT ENDPOINTS ============
 
   /**
-   * Add a document to a ticket
+   * Add documents to a ticket (handles file uploads)
    * POST /api/tickets/:ticketId/documents
+   * Accepts multiple files (up to 3) via multipart/form-data
    */
   async addTicketDocument(req: AuthenticatedRequest, res: Response): Promise<void> {
     try {
@@ -472,19 +478,50 @@ export class TicketController {
       }
 
       const { ticketId } = req.params;
-      const documentData = req.body;
+      const files = req.files as Express.Multer.File[];
 
-      const document = await ticketService.addTicketDocument(
-        ticketId,
-        documentData,
-        req.user.id,
-        req.user.role
-      );
+      // Check if files were uploaded
+      if (!files || files.length === 0) {
+        res.status(400).json({
+          success: false,
+          message: 'No files uploaded. Please select at least one file.'
+        });
+        return;
+      }
+
+      // Process and save each uploaded file
+      const uploadedDocuments = [];
+      for (const file of files) {
+        const documentData = {
+          document_type: file.mimetype.startsWith('image/') ? 'image' : 'pdf',
+          file_url: `/uploads/tickets/${file.filename}`,
+          file_name: file.originalname,
+          file_size: file.size,
+          file_mime_type: file.mimetype,
+          title: req.body.title || file.originalname,
+          description: req.body.description || undefined,
+        };
+
+        const document = await ticketService.addTicketDocument(
+          ticketId,
+          documentData,
+          req.user.id,
+          req.user.role
+        );
+
+        uploadedDocuments.push(document);
+      }
+
+      logger.info('Documents uploaded successfully', {
+        ticket_id: ticketId,
+        user_id: req.user.id,
+        file_count: uploadedDocuments.length
+      });
 
       res.status(201).json({
         success: true,
-        message: 'Document added successfully',
-        data: document
+        message: `${uploadedDocuments.length} document(s) uploaded successfully`,
+        data: uploadedDocuments
       });
     } catch (error) {
       logger.error('Error in addTicketDocument controller:', {
@@ -493,10 +530,17 @@ export class TicketController {
         userId: req.user?.id
       });
 
-      res.status(500).json({
-        success: false,
-        message: 'Internal server error'
-      });
+      if (error instanceof AppError) {
+        res.status(error.statusCode || 500).json({
+          success: false,
+          message: error.message
+        });
+      } else {
+        res.status(500).json({
+          success: false,
+          message: 'Internal server error'
+        });
+      }
     }
   }
 
@@ -531,7 +575,7 @@ export class TicketController {
   // ============ ADMIN TICKET ENDPOINTS ============
 
   /**
-   * Create a new admin support ticket (User -> Admin/SuperAdmin)
+   * Create a new admin support ticket (User/Contractor -> Admin/SuperAdmin)
    * POST /api/tickets/admin
    * Admin tickets are created unassigned (admin_id = null)
    * Super admin will assign them later if needed
@@ -550,12 +594,14 @@ export class TicketController {
 
       const ticket = await ticketService.createAdminTicket(
         data,
-        req.user.id
+        req.user.id,
+        req.user.role
       );
 
       logger.info('Admin ticket created via API', {
         ticket_id: ticket.id,
-        user_id: req.user.id
+        user_id: req.user.id,
+        user_role: req.user.role
       });
 
       res.status(201).json({

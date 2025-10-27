@@ -90,17 +90,19 @@ export class TicketService {
   }
 
   /**
-   * Create a new admin support ticket (User -> Admin/SuperAdmin)
+   * Create a new admin support ticket (User/Contractor -> Admin/SuperAdmin)
    * Admin tickets are always created unassigned (admin_id = null)
    * Super admin will assign them later if needed
    */
   async createAdminTicket(
     data: CreateAdminTicketRequest,
-    userId: string
+    userId: string,
+    userRole: string
   ): Promise<Ticket> {
     try {
       logger.info('Creating new admin ticket', {
         user_id: userId,
+        user_role: userRole,
         admin_id: 'unassigned'
       });
 
@@ -108,7 +110,7 @@ export class TicketService {
         data: {
           ticket_type: 'admin_support',
           user_id: userId,
-          admin_id: null, 
+          admin_id: null,
           project_id: null,
           contractor_id: null,
           title: data.title,
@@ -124,25 +126,29 @@ export class TicketService {
         },
       });
 
+      const roleDisplayName = userRole === 'contractor' ? 'Contractor' : 'User';
+
       await this.createTimelineEntry(ticket.id, {
         event_type: 'created',
         title: 'Admin ticket created',
         description: `Admin support ticket "${data.title}" has been created`,
         created_by_id: userId,
-        created_by_role: 'user',
-        created_by_name: 'User',
+        created_by_role: userRole,
+        created_by_name: roleDisplayName,
       });
 
       logger.info('Admin ticket created successfully', {
         ticket_id: ticket.id,
-        user_id: userId
+        user_id: userId,
+        user_role: userRole
       });
 
       return ticket;
     } catch (error) {
       logger.error('Error creating admin ticket:', {
         error: error instanceof Error ? error.message : 'Unknown error',
-        user_id: userId
+        user_id: userId,
+        user_role: userRole
       });
       throw error;
     }
@@ -364,6 +370,7 @@ export class TicketService {
 
   /**
    * Get all tickets for a contractor
+   * Includes: project_support tickets assigned to contractor + admin_support tickets created by contractor
    */
   async getContractorTickets(
     contractorId: string,
@@ -371,6 +378,7 @@ export class TicketService {
       status?: TicketStatus;
       priority?: string;
       category?: string;
+      ticket_type?: string;
       page?: number;
       limit?: number;
       sort?: string;
@@ -384,11 +392,17 @@ export class TicketService {
       const sort = filters?.sort || 'created_at';
       const order = filters?.order || 'desc';
 
-      const whereClause: any = { contractor_id: contractorId };
+      const whereClause: any = {
+        OR: [
+          { contractor_id: contractorId }, // project_support tickets assigned to contractor
+          { user_id: contractorId, ticket_type: 'admin_support' } // admin_support tickets created by contractor
+        ]
+      };
 
       if (filters?.status) whereClause.status = filters.status;
       if (filters?.priority) whereClause.priority = filters.priority;
       if (filters?.category) whereClause.category = filters.category;
+      if (filters?.ticket_type) whereClause.ticket_type = filters.ticket_type;
 
       const [tickets, total] = await Promise.all([
         prisma.ticket.findMany({
@@ -486,8 +500,16 @@ export class TicketService {
         throw new AppError('You do not have permission to update this ticket', 403);
       }
 
-      if (userRole === 'contractor' && ticket.contractor_id !== userId) {
-        throw new AppError('You do not have permission to update this ticket', 403);
+      if (userRole === 'contractor') {
+        // Contractor can update project_support tickets assigned to them
+        // OR admin_support tickets they created
+        const canUpdate =
+          (ticket.ticket_type === 'project_support' && ticket.contractor_id === userId) ||
+          (ticket.ticket_type === 'admin_support' && ticket.user_id === userId);
+
+        if (!canUpdate) {
+          throw new AppError('You do not have permission to update this ticket', 403);
+        }
       }
 
       const updatedTicket = await prisma.ticket.update({
@@ -559,6 +581,7 @@ export class TicketService {
         } else if (ticket.ticket_type === 'admin_support') {
           const canResolve =
             (userRole === 'user' && ticket.user_id === userId) ||
+            (userRole === 'contractor' && ticket.user_id === userId) ||
             (userRole === 'admin' && ticket.admin_id === userId) ||
             (userRole === 'super_admin');
 
@@ -663,11 +686,14 @@ export class TicketService {
           throw new AppError('You do not have permission to reply to this ticket', 403);
         }
       } else if (ticket.ticket_type === 'admin_support') {
-        if (!['user', 'admin', 'super_admin'].includes(userRole)) {
-          throw new AppError('Contractors cannot reply to admin support tickets', 403);
+        if (!['user', 'contractor', 'admin', 'super_admin'].includes(userRole)) {
+          throw new AppError('Invalid role for replying to admin support tickets', 403);
         }
         if (userRole === 'user' && ticket.user_id !== userId) {
           throw new AppError('You do not have permission to reply to this ticket', 403);
+        }
+        if (userRole === 'contractor' && ticket.user_id !== userId) {
+          throw new AppError('You can only reply to admin tickets you created', 403);
         }
         if (userRole === 'admin' && ticket.admin_id !== userId) {
           throw new AppError('You can only reply to tickets assigned to you', 403);

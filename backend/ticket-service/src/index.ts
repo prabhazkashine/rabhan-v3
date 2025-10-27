@@ -1,5 +1,6 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import path from 'path';
 import 'dotenv/config';
 import { logger } from './utils/logger';
 import { errorHandler, notFoundHandler } from './middleware/error-handler';
@@ -14,6 +15,9 @@ app.use(cors());
 // Body parsing
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Static file serving for uploaded documents
+app.use('/uploads', express.static(path.join(process.cwd(), 'uploads')));
 
 // Request logging
 app.use((req: Request, res: Response, next: NextFunction) => {

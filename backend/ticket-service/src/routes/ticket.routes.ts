@@ -14,6 +14,7 @@ import {
 import { asyncHandler } from '../middleware/error-handler';
 import { z } from 'zod';
 import { logger } from '../utils/logger';
+import { uploadTicketDocuments, handleMulterError } from '../config/multer.config';
 
 const router = Router();
 
@@ -56,8 +57,8 @@ router.get('/',
 
 /**
  * POST /api/tickets/admin
- * Create a new admin support ticket (User -> Admin/SuperAdmin)
- * Any authenticated user can create an admin ticket
+ * Create a new admin support ticket (User/Contractor -> Admin/SuperAdmin)
+ * Any authenticated user or contractor can create an admin ticket
  */
 router.post('/admin',
   authMiddleware.authenticate,
@@ -193,12 +194,25 @@ router.get('/:ticketId/timeline',
 
 /**
  * POST /api/tickets/:ticketId/documents
- * Add a document to a ticket
+ * Upload documents to a ticket (images and PDFs only, max 3 files, 5MB each)
+ * Uses multipart/form-data with field name "documents"
  */
 router.post('/:ticketId/documents',
   authMiddleware.authenticate,
   validateParams(ticketIdParamSchema),
-  validateRequest(uploadTicketDocumentSchema),
+  (req: Request, res: Response, next: NextFunction) => {
+    uploadTicketDocuments(req, res, (err: any) => {
+      if (err) {
+        const errorMessage = handleMulterError(err);
+        logger.error('File upload error:', { error: errorMessage });
+        return res.status(400).json({
+          success: false,
+          message: errorMessage
+        });
+      }
+      next();
+    });
+  },
   asyncHandler(async (req: Request, res: Response) => {
     await ticketController.addTicketDocument(req, res);
   })
